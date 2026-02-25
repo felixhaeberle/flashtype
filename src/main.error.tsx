@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { OpfsSahEnvironment } from "@lix-js/sdk";
 import { RotateCcw, Bug, AlertTriangle } from "lucide-react";
 
 function formatError(err: unknown): string {
@@ -59,36 +58,14 @@ function containsOpfsHandleConflict(err: unknown): boolean {
 
 /**
  * Minimal error UI shown when Lix fails to load.
- *
- * Provides a destructive action to reset the Origin Private File System (OPFS)
- * using `OpfsStorage.clean()` and then reloads the app. This action deletes
- * ALL OPFS data for this origin and cannot be undone.
- *
- * If this error is unexpected, please contact the developer.
- *
- * @example
- * <ErrorFallback error={new Error("failed to open Lix")} />
  */
 export function ErrorFallback(props: { error: unknown }) {
 	const [busy, setBusy] = useState(false);
 
 	async function handleReset() {
 		if (busy) return;
-		const confirmed = window.confirm(
-			"This will delete ALL data stored by this site in your browser (OPFS).\n\n" +
-				"This cannot be undone and will likely result in data loss.\n\n" +
-				"Do you want to proceed?",
-		);
-		if (!confirmed) return;
-		try {
-			setBusy(true);
-			await OpfsSahEnvironment.clear();
-			window.location.reload();
-		} catch (e) {
-			console.error("Failed to reset OPFS:", e);
-			setBusy(false);
-			alert("Failed to reset OPFS. See console for details.");
-		}
+		setBusy(true);
+		window.location.reload();
 	}
 
 	if (containsOpfsHandleConflict(props.error)) {
@@ -137,7 +114,7 @@ export function ErrorFallback(props: { error: unknown }) {
 				</p>
 				<div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 mb-4">
 					<p className="text-sm font-medium text-destructive">
-						Warning: resetting storage will delete data and cannot be undone.
+						In-memory mode is enabled. Reload to start from a clean state.
 					</p>
 				</div>
 				<div className="flex items-center gap-3">
@@ -146,7 +123,7 @@ export function ErrorFallback(props: { error: unknown }) {
 						disabled={busy}
 						className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-2 text-white text-sm disabled:opacity-60"
 					>
-						{busy ? "Resetting…" : "Reset OPFS (data loss)"}
+						{busy ? "Reloading…" : "Reload App"}
 					</button>
 					<button
 						onClick={() => window.location.reload()}

@@ -3,14 +3,24 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import { LixProvider } from "@lix-js/react-utils";
 import { openLix } from "@lix-js/sdk";
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
 import { MarkdownView } from "./index";
 import { KeyValueProvider } from "@/hooks/key-value/use-key-value";
 import { KEY_VALUE_DEFINITIONS } from "@/hooks/key-value/schema";
+import markdownPluginV2Manifest from "../../../lix/packages/plugin-md-v2/manifest.json";
+import markdownPluginV2WasmRaw from "../../../lix/target/wasm32-wasip2/release/plugin_md_v2.wasm?raw";
+
+const markdownPluginV2WasmBytes = Uint8Array.from(
+	markdownPluginV2WasmRaw,
+	(char) => char.charCodeAt(0),
+);
 
 describe("MarkdownView", () => {
 	test("renders an empty state when no file is provided", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 
 		let utils: ReturnType<typeof render> | undefined;
 		await act(async () => {
@@ -35,7 +45,11 @@ describe("MarkdownView", () => {
 	});
 
 	test("renders the TipTap editor when file is found", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		await lix.db
 			.insertInto("file")
 			.values({
@@ -85,7 +99,11 @@ describe("MarkdownView", () => {
 	});
 
 	test("renders the requested file even if a different active file is stored", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		await lix.db
 			.insertInto("file")
 			.values({
@@ -150,7 +168,11 @@ describe("MarkdownView", () => {
 	});
 
 	test("shows a not found message when the file is missing", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 
 		let utils: ReturnType<typeof render> | undefined;
 		await act(async () => {

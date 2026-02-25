@@ -1,15 +1,25 @@
 import { describe, test, expect } from "vitest";
 import { openLix, createCheckpoint } from "@lix-js/sdk";
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
 import {
 	selectFiles,
 	selectFilesystemEntries,
 	selectWorkingDiffCount,
 } from "@/queries";
+import markdownPluginV2Manifest from "../lix/packages/plugin-md-v2/manifest.json";
+import markdownPluginV2WasmRaw from "../lix/target/wasm32-wasip2/release/plugin_md_v2.wasm?raw";
+
+const markdownPluginV2WasmBytes = Uint8Array.from(
+	markdownPluginV2WasmRaw,
+	(char) => char.charCodeAt(0),
+);
 
 describe("selectFiles", () => {
 	test("returns minimal rows sorted by path", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 
 		await lix.db
 			.insertInto("file")
@@ -31,7 +41,11 @@ describe("selectFiles", () => {
 
 describe("selectFilesystemEntries", () => {
 	test("returns directories and files with hierarchy metadata", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 
 		// Seed directories (nested) via the view so triggers normalize inputs.
 		await lix.db
@@ -85,7 +99,11 @@ describe("selectFilesystemEntries", () => {
 	});
 
 	test("distinguishes root files from nested files", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 
 		await lix.db
 			.insertInto("directory")
@@ -110,7 +128,11 @@ describe("selectFilesystemEntries", () => {
 	});
 
 	test("includes hidden flags for directories and files", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 
 		await lix.db
 			.insertInto("directory")
@@ -137,7 +159,11 @@ describe("selectFilesystemEntries", () => {
 
 describe("selectWorkingDiffCount", () => {
 	test("scopes change count to active file and responds to edits/checkpoints", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 
 		const fileA = "file_A";
 		const fileB = "file_B";
@@ -204,7 +230,11 @@ describe("selectWorkingDiffCount", () => {
 	});
 
 	test("order-only change yields zero working diff count (excludes root schema)", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 
 		const fileId = "file_order_only";
 		const before = `# Title\n\nParagraph 1.\n\nParagraph 2.`;

@@ -1,12 +1,22 @@
 import { describe, expect, test } from "vitest";
 import { openLix, createCheckpoint } from "@lix-js/sdk";
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
 import { selectCheckpoints } from "@/queries";
 import { selectCheckpointFiles } from "./queries";
+import markdownPluginV2Manifest from "../../../lix/packages/plugin-md-v2/manifest.json";
+import markdownPluginV2WasmRaw from "../../../lix/target/wasm32-wasip2/release/plugin_md_v2.wasm?raw";
+
+const markdownPluginV2WasmBytes = Uint8Array.from(
+	markdownPluginV2WasmRaw,
+	(char) => char.charCodeAt(0),
+);
 
 describe("selectCheckpointFiles", () => {
 	test("returns Markdown file summaries for a checkpoint", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		const encoder = new TextEncoder();
 		const fileId = "commit_view_file";
 		const filePath = "/docs/commit-view.md";

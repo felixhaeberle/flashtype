@@ -24,6 +24,13 @@ import { AstSchemas } from "@opral/markdown-wc";
 import type { Editor } from "@tiptap/core";
 import { plugin as mdPlugin } from "@lix-js/plugin-md";
 import { insertMarkdownSchemas } from "../../../lib/insert-markdown-schemas";
+import markdownPluginV2Manifest from "../../../../lix/packages/plugin-md-v2/manifest.json";
+import markdownPluginV2WasmRaw from "../../../../lix/target/wasm32-wasip2/release/plugin_md_v2.wasm?raw";
+
+const markdownPluginV2WasmBytes = Uint8Array.from(
+	markdownPluginV2WasmRaw,
+	(char) => char.charCodeAt(0),
+);
 
 function Providers({
 	lix,
@@ -47,7 +54,6 @@ function Providers({
 
 test("renders initial document content", async () => {
 	const lix = await openLix({
-		providePlugins: [mdPlugin],
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
@@ -55,6 +61,10 @@ test("renders initial document content", async () => {
 				lixcol_version_id: "global",
 			},
 		],
+	});
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
 	});
 	await insertMarkdownSchemas({ lix });
 	const fileId = "file_render_doc";
@@ -97,7 +107,6 @@ test("persists state changes on edit (paragraph append)", async () => {
 	const markdown = "# Title\n\nHello";
 
 	const lix = await openLix({
-		providePlugins: [mdPlugin],
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
@@ -111,6 +120,10 @@ test("persists state changes on edit (paragraph append)", async () => {
 				lixcol_untracked: true,
 			},
 		],
+	});
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
 	});
 	await insertMarkdownSchemas({ lix });
 
@@ -168,7 +181,6 @@ test("persists state changes on edit (paragraph append)", async () => {
 
 test("renders content under React.StrictMode", async () => {
 	const lix = await openLix({
-		providePlugins: [mdPlugin],
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
@@ -176,6 +188,10 @@ test("renders content under React.StrictMode", async () => {
 				lixcol_version_id: "global",
 			},
 		],
+	});
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
 	});
 	await insertMarkdownSchemas({ lix });
 
@@ -218,7 +234,6 @@ test("renders content under React.StrictMode", async () => {
 test("shows placeholder only while focused on an empty document", async () => {
 	const fileId = "file_placeholder_focus";
 	const lix = await openLix({
-		providePlugins: [mdPlugin],
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
@@ -232,6 +247,10 @@ test("shows placeholder only while focused on an empty document", async () => {
 				lixcol_untracked: true,
 			},
 		],
+	});
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
 	});
 	await insertMarkdownSchemas({ lix });
 
@@ -288,7 +307,6 @@ test("shows placeholder only while focused on an empty document", async () => {
 test("clicking the surface focuses the editor even when content exists", async () => {
 	const fileId = "file_focus_surface";
 	const lix = await openLix({
-		providePlugins: [mdPlugin],
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
@@ -302,6 +320,10 @@ test("clicking the surface focuses the editor even when content exists", async (
 				lixcol_untracked: true,
 			},
 		],
+	});
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
 	});
 	await insertMarkdownSchemas({ lix });
 
@@ -342,7 +364,6 @@ test("clicking the surface focuses the editor even when content exists", async (
 
 test("updates editor when switching to a version with different external state", async () => {
 	const lix = await openLix({
-		providePlugins: [mdPlugin],
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
@@ -350,6 +371,10 @@ test("updates editor when switching to a version with different external state",
 				lixcol_version_id: "global",
 			},
 		],
+	});
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
 	});
 	await insertMarkdownSchemas({ lix });
 
@@ -438,7 +463,6 @@ test("updates editor when switching to a version with different external state",
 
 test("updates editor when the file's state is changed externally in the same version", async () => {
 	const lix = await openLix({
-		providePlugins: [mdPlugin],
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
@@ -446,6 +470,10 @@ test("updates editor when the file's state is changed externally in the same ver
 				lixcol_version_id: "global",
 			},
 		],
+	});
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
 	});
 	await insertMarkdownSchemas({ lix });
 
@@ -516,7 +544,6 @@ test("updates editor when the file's state is changed externally in the same ver
 
 test("updates editor when file.data is updated externally (simulate updateFile with markdown)", async () => {
 	const lix = await openLix({
-		providePlugins: [mdPlugin],
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
@@ -524,6 +551,10 @@ test("updates editor when file.data is updated externally (simulate updateFile w
 				lixcol_version_id: "global",
 			},
 		],
+	});
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
 	});
 	await insertMarkdownSchemas({ lix });
 
@@ -576,7 +607,6 @@ test("updates editor when file.data is updated externally (simulate updateFile w
 
 test("preserves main content when switching to a new version and back", async () => {
 	const lix = await openLix({
-		providePlugins: [mdPlugin],
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
@@ -584,6 +614,10 @@ test("preserves main content when switching to a new version and back", async ()
 				lixcol_version_id: "global",
 			},
 		],
+	});
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
 	});
 
 	const fileId = "file_regression_main_preserve";
@@ -698,7 +732,6 @@ For example:
 > Greet the user, tell them that they already played around with Flashtype. Thus, they should now modify the AGENTS.md to specify how they want you to collaborate with them.
 `;
 	const lix = await openLix({
-		providePlugins: [mdPlugin],
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
@@ -706,6 +739,10 @@ For example:
 				lixcol_version_id: "global",
 			},
 		],
+	});
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
 	});
 	await insertMarkdownSchemas({ lix });
 

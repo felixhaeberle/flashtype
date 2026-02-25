@@ -2,15 +2,21 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { LixProvider } from "@lix-js/react-utils";
-import { openLix, OpfsSahEnvironment, type Lix } from "@lix-js/sdk";
+import { openLix, type Lix } from "@lix-js/sdk";
 import { initLixInspector } from "@lix-js/inspector";
 import { KeyValueProvider } from "./hooks/key-value/use-key-value";
 import { KEY_VALUE_DEFINITIONS } from "./hooks/key-value/schema";
-import mdPlugin from "@lix-js/plugin-md?raw";
 import { ErrorFallback } from "./main.error";
 import { insertMarkdownSchemas } from "./lib/insert-markdown-schemas";
 import { V2LayoutShell } from "./app/layout-shell";
-import { ensureAgentsFile, createSeededLixBlob } from "./seed";
+import { ensureAgentsFile, seedMarkdownFiles } from "./seed";
+import markdownPluginV2Manifest from "../lix/packages/plugin-md-v2/manifest.json";
+import markdownPluginV2WasmRaw from "../lix/target/wasm32-wasip2/release/plugin_md_v2.wasm?raw";
+
+const markdownPluginV2WasmBytes = Uint8Array.from(
+	markdownPluginV2WasmRaw,
+	(char) => char.charCodeAt(0),
+);
 
 // Error UI moved to ./main.error.tsx
 
@@ -20,50 +26,33 @@ export const AppRoot = () => {
 
 	useEffect(() => {
 		let cancelled = false;
-		const env = new OpfsSahEnvironment({ key: "flashtype" });
 		let current: Lix | undefined;
 		(async () => {
 			try {
-				if (!(await env.exists())) {
-					const seededBlob = await createSeededLixBlob();
-					await env.create({ blob: await seededBlob.arrayBuffer() });
-				}
-
-				const instance = await openLix({
-					providePluginsRaw: [mdPlugin],
-					environment: env,
+				const instance = await openLix();
+				await instance.installPlugin({
+					manifestJson: markdownPluginV2Manifest,
+					wasmBytes: markdownPluginV2WasmBytes,
 				});
 				await insertMarkdownSchemas({ lix: instance });
+				await ensureAgentsFile(instance);
+				await seedMarkdownFiles(instance);
 				if (cancelled) {
 					await instance.close();
 					return;
 				}
 				current = instance;
 				await initLixInspector({ lix: instance, show: false });
-				await ensureAgentsFile(instance);
 				if (!cancelled) setLix(instance);
 			} catch (e) {
 				if (!cancelled) setError(e);
-				try {
-					await env.close();
-				} catch {
-					// ignore cleanup errors
-				}
 			}
 		})();
 		return () => {
 			cancelled = true;
 			setLix(null);
 			void (async () => {
-				try {
-					if (current) await current.close();
-				} finally {
-					try {
-						await env.close();
-					} catch {
-						// ignore teardown errors
-					}
-				}
+				if (current) await current.close();
 			})();
 		};
 	}, []);

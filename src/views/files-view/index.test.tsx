@@ -3,14 +3,19 @@ import { beforeAll, afterAll, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { LixProvider } from "@lix-js/react-utils";
 import { openLix } from "@lix-js/sdk";
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
-
+import markdownPluginV2Manifest from "../../../lix/packages/plugin-md-v2/manifest.json";
+import markdownPluginV2WasmRaw from "../../../lix/target/wasm32-wasip2/release/plugin_md_v2.wasm?raw";
 import { FilesView } from "./index";
 import type { ViewContext } from "../../app/types";
 import {
 	FILE_VIEW_KIND,
 	fileViewInstance,
 } from "../../app/view-instance-helpers";
+
+const markdownPluginV2WasmBytes = Uint8Array.from(
+	markdownPluginV2WasmRaw,
+	(char) => char.charCodeAt(0),
+);
 
 const createViewContext = (
 	lix: Awaited<ReturnType<typeof openLix>>,
@@ -49,7 +54,11 @@ describe("FilesView", () => {
 	});
 
 	test("creates an inline draft when Cmd+. is pressed", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		const openView = vi.fn();
 
 		let utils: ReturnType<typeof render>;
@@ -110,7 +119,11 @@ describe("FilesView", () => {
 	});
 
 	test("Cmd+Backspace deletes the selected file", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		await lix.db
 			.insertInto("file")
 			.values({
@@ -157,7 +170,11 @@ describe("FilesView", () => {
 	});
 
 	test("Cmd+Backspace deletes the selected directory", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		await lix.db
 			.insertInto("directory")
 			.values({ path: "/docs/" } as any)
@@ -203,7 +220,11 @@ describe("FilesView", () => {
 	});
 
 	test("replaces whitespace with dashes when creating files", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		const openView = vi.fn();
 
 		let utils: ReturnType<typeof render>;
@@ -247,7 +268,11 @@ describe("FilesView", () => {
 	});
 
 	test("creates an inline directory draft when Shift+Cmd+. is pressed", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		const openView = vi.fn();
 
 		let utils: ReturnType<typeof render>;
@@ -298,7 +323,11 @@ describe("FilesView", () => {
 	});
 
 	test("ignores Ctrl+. on macOS", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		const openView = vi.fn();
 
 		let utils: ReturnType<typeof render>;
@@ -327,7 +356,11 @@ describe("FilesView", () => {
 	});
 
 	test("ignores Ctrl+Shift+. on macOS", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		const openView = vi.fn();
 
 		let utils: ReturnType<typeof render>;
@@ -364,7 +397,11 @@ describe("FilesView", () => {
 	});
 
 	test("cancels the draft when Escape is pressed", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		const openView = vi.fn();
 
 		let utils: ReturnType<typeof render>;

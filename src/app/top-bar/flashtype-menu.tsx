@@ -3,9 +3,7 @@ import {
 	CircleOff,
 	FileDown,
 	FilePlus,
-	FileUp,
 	Hammer,
-	RotateCcw,
 	Search,
 	Zap,
 } from "lucide-react";
@@ -22,7 +20,6 @@ import {
 import { useLix } from "@lix-js/react-utils";
 import { toggleLixInspector } from "@lix-js/inspector";
 import { seedMarkdownFiles } from "@/seed";
-import { OpfsSahEnvironment } from "@lix-js/sdk";
 import { useCallback } from "react";
 import { useKeyValue } from "@/hooks/key-value/use-key-value";
 
@@ -50,41 +47,6 @@ export function FlashtypeMenu() {
 	const toggleDeterministicMode = useCallback(async () => {
 		await setDeterministicMode({ enabled: !deterministicEnabled });
 	}, [deterministicEnabled, setDeterministicMode]);
-
-	const handleOpenLix = async () => {
-		try {
-			const input = document.createElement("input");
-			input.type = "file";
-			input.accept = ".lix";
-			input.onchange = async (e) => {
-				const file = (e.target as HTMLInputElement).files?.[0];
-				if (!file) return;
-				try {
-					// Close current lix instance
-					if (lix) {
-						try {
-							await lix.close();
-						} catch {
-							// ignore close errors so we can still proceed
-						}
-					}
-					// Clear OPFS to remove old database
-					await OpfsSahEnvironment.clear();
-					// Store the new file in OPFS
-					const env = new OpfsSahEnvironment({ key: "flashtype" });
-					await env.create({ blob: await file.arrayBuffer() });
-					// Reload to open the new file
-					window.location.reload();
-				} catch (error) {
-					console.error("Failed to open Lix file", error);
-					alert("Failed to open Lix file. Please try again.");
-				}
-			};
-			input.click();
-		} catch (error) {
-			console.error("Failed to open file picker", error);
-		}
-	};
 
 	const handleExportLix = async () => {
 		if (!lix) return;
@@ -125,22 +87,6 @@ export function FlashtypeMenu() {
 		}
 	};
 
-	const handleResetOpfs = async () => {
-		try {
-			if (lix) {
-				try {
-					await lix.close();
-				} catch {
-					// ignore close errors so we can still reset
-				}
-			}
-			await OpfsSahEnvironment.clear();
-			window.location.reload();
-		} catch (error) {
-			console.error("Failed to reset OPFS", error);
-		}
-	};
-
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
@@ -158,15 +104,6 @@ export function FlashtypeMenu() {
 				side="bottom"
 				sideOffset={6}
 			>
-				<DropdownMenuItem
-					className="flex items-center gap-1.5 text-xs"
-					onSelect={() => {
-						void handleOpenLix();
-					}}
-				>
-					<FileUp className="h-3.5 w-3.5 shrink-0" />
-					<span>Open lix file</span>
-				</DropdownMenuItem>
 				<DropdownMenuItem
 					className="flex items-center gap-1.5 text-xs"
 					onSelect={() => {
@@ -216,15 +153,6 @@ export function FlashtypeMenu() {
 									? "Turn off deterministic mode"
 									: "Turn on deterministic mode"}
 							</span>
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							className="gap-1.5 text-xs"
-							onSelect={() => {
-								void handleResetOpfs();
-							}}
-						>
-							<RotateCcw className="h-3.5 w-3.5" />
-							<span>Reset OPFS</span>
 						</DropdownMenuItem>
 					</DropdownMenuSubContent>
 				</DropdownMenuSub>

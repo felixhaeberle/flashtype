@@ -1,6 +1,5 @@
 import { test, expect } from "vitest";
 import { openLix } from "@lix-js/sdk";
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
 import { createEditor } from "./create-editor";
 import { astToTiptapDoc } from "@opral/markdown-wc/tiptap";
 import { parseMarkdown } from "@opral/markdown-wc";
@@ -8,6 +7,13 @@ import { handlePaste } from "./handle-paste";
 import { AstSchemas } from "@opral/markdown-wc";
 import { insertMarkdownSchemas } from "../../../lib/insert-markdown-schemas";
 import { Editor } from "@tiptap/core";
+import markdownPluginV2Manifest from "../../../../lix/packages/plugin-md-v2/manifest.json";
+import markdownPluginV2WasmRaw from "../../../../lix/target/wasm32-wasip2/release/plugin_md_v2.wasm?raw";
+
+const markdownPluginV2WasmBytes = Uint8Array.from(
+	markdownPluginV2WasmRaw,
+	(char) => char.charCodeAt(0),
+);
 
 const ensureTrailingNewline = (value: string) =>
 	value.endsWith("\n") ? value : `${value}\n`;
@@ -41,7 +47,6 @@ async function createEditorFromFile(args: {
 // TipTap + Lix persistence paste tests (no React)
 test("paste at start inserts before existing content (TipTap + Lix)", async () => {
 	const lix = await openLix({
-		providePlugins: [mdPlugin],
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
@@ -49,6 +54,10 @@ test("paste at start inserts before existing content (TipTap + Lix)", async () =
 				lixcol_version_id: "global",
 			},
 		],
+	});
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
 	});
 	const fileId = "paste_start_before";
 
@@ -132,7 +141,11 @@ test("paste at start inserts before existing content (TipTap + Lix)", async () =
 });
 
 test("paste at end inserts after existing content (TipTap + Lix)", async () => {
-	const lix = await openLix({ providePlugins: [mdPlugin] });
+	const lix = await openLix();
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
+	});
 	const fileId = "paste_end_after";
 
 	await lix.db
@@ -173,7 +186,11 @@ test("paste at end inserts after existing content (TipTap + Lix)", async () => {
 });
 
 test("replace word selection with paste (TipTap + Lix)", async () => {
-	const lix = await openLix({ providePlugins: [mdPlugin] });
+	const lix = await openLix();
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
+	});
 	const fileId = "paste_replace_word";
 	const initial = "Replace THIS TEXT here.";
 	await lix.db
@@ -214,7 +231,11 @@ test("replace word selection with paste (TipTap + Lix)", async () => {
 });
 
 test("replace entire document with paste (TipTap + Lix)", async () => {
-	const lix = await openLix({ providePlugins: [mdPlugin] });
+	const lix = await openLix();
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
+	});
 	const fileId = "paste_replace_all";
 	const initial = "Old content\n\nTo be replaced";
 	await lix.db
@@ -257,7 +278,11 @@ test("replace entire document with paste (TipTap + Lix)", async () => {
 });
 
 test("paste multi-paragraph plain text into empty doc (TipTap + Lix)", async () => {
-	const lix = await openLix({ providePlugins: [mdPlugin] });
+	const lix = await openLix();
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
+	});
 	const fileId = "paste_plain_multi";
 	await lix.db
 		.insertInto("file")
@@ -299,7 +324,11 @@ test("paste multi-paragraph plain text into empty doc (TipTap + Lix)", async () 
 });
 
 test("Enter splits paragraph → assigns unique ids and root order has no duplicates", async () => {
-	const lix = await openLix({ providePlugins: [mdPlugin] });
+	const lix = await openLix();
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
+	});
 	const fileId = "enter_split_ids_unique";
 
 	await lix.db
@@ -359,7 +388,11 @@ test("Enter splits paragraph → assigns unique ids and root order has no duplic
 });
 
 test("two Enters create three paragraphs with unique ids and correct order", async () => {
-	const lix = await openLix({ providePlugins: [mdPlugin] });
+	const lix = await openLix();
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
+	});
 	const fileId = "enter_split_three";
 
 	// Seed with a single paragraph
@@ -444,7 +477,11 @@ test("two Enters create three paragraphs with unique ids and correct order", asy
 });
 
 test("normalize CRLF line endings on paste (TipTap + Lix)", async () => {
-	const lix = await openLix({ providePlugins: [mdPlugin] });
+	const lix = await openLix();
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
+	});
 	const fileId = "paste_crlf";
 	await lix.db
 		.insertInto("file")
@@ -481,7 +518,11 @@ test("normalize CRLF line endings on paste (TipTap + Lix)", async () => {
 });
 
 test("paste complex markdown with lists and code blocks (TipTap + Lix)", async () => {
-	const lix = await openLix({ providePlugins: [mdPlugin] });
+	const lix = await openLix();
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
+	});
 	const fileId = "paste_complex";
 	await lix.db
 		.insertInto("file")
@@ -522,7 +563,11 @@ test("paste complex markdown with lists and code blocks (TipTap + Lix)", async (
 });
 
 test("paste inline formatting markdown (TipTap + Lix)", async () => {
-	const lix = await openLix({ providePlugins: [mdPlugin] });
+	const lix = await openLix();
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
+	});
 	const fileId = "paste_inline_format";
 	await lix.db
 		.insertInto("file")
@@ -568,7 +613,11 @@ test("paste inline formatting markdown (TipTap + Lix)", async () => {
  *   logic persists a consistent 3‑paragraph snapshot with unique ids.
  */
 test("rapid Enter/type coalescing persists 3 paragraphs with unique ids", async () => {
-	const lix = await openLix({ providePlugins: [mdPlugin] });
+	const lix = await openLix();
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
+	});
 	const fileId = "rapid_enter_coalesce";
 
 	// Seed with a single paragraph
@@ -660,7 +709,11 @@ test("rapid Enter/type coalescing persists 3 paragraphs with unique ids", async 
 });
 
 test("state cleanup on delete removes row and prunes root order", async () => {
-	const lix = await openLix({ providePlugins: [mdPlugin] });
+	const lix = await openLix();
+	await lix.installPlugin({
+		manifestJson: markdownPluginV2Manifest,
+		wasmBytes: markdownPluginV2WasmBytes,
+	});
 	const fileId = "delete_middle_cleanup";
 
 	// Seed with three paragraphs

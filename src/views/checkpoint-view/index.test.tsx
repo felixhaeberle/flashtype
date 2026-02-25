@@ -9,8 +9,8 @@ import {
 } from "@testing-library/react";
 import { LixProvider } from "@lix-js/react-utils";
 import { openLix, createCheckpoint } from "@lix-js/sdk";
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
-
+import markdownPluginV2Manifest from "../../../lix/packages/plugin-md-v2/manifest.json";
+import markdownPluginV2WasmRaw from "../../../lix/target/wasm32-wasip2/release/plugin_md_v2.wasm?raw";
 import { CheckpointView, view as checkpointViewDefinition } from "./index";
 import type { ViewContext, ViewInstance } from "../../app/types";
 import {
@@ -21,6 +21,11 @@ import {
 	historyViewInstance,
 } from "../../app/view-instance-helpers";
 
+const markdownPluginV2WasmBytes = Uint8Array.from(
+	markdownPluginV2WasmRaw,
+	(char) => char.charCodeAt(0),
+);
+
 async function countCommits(lix: Awaited<ReturnType<typeof openLix>>) {
 	const rows = await lix.db.selectFrom("commit").select("id").execute();
 	return rows.length;
@@ -28,7 +33,11 @@ async function countCommits(lix: Awaited<ReturnType<typeof openLix>>) {
 
 describe("CheckpointView", () => {
 	test("creates a checkpoint when clicking the button", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		const fileId = "checkpoint_view_test_file";
 
 		await lix.db
@@ -78,7 +87,11 @@ describe("CheckpointView", () => {
 	});
 
 	test("updates tab badge count based on working changes", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		await lix.db
 			.insertInto("file")
 			.values({
@@ -125,7 +138,11 @@ describe("CheckpointView", () => {
 	});
 
 	test("invokes openView for history when clicking View checkpoints", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		const openView = vi.fn();
 
 		let utils: ReturnType<typeof render>;
@@ -159,7 +176,11 @@ describe("CheckpointView", () => {
 	});
 
 	test("opens a diff as a pending preview when clicking a file row", async () => {
-		const lix = await openLix({ providePlugins: [mdPlugin] });
+		const lix = await openLix();
+		await lix.installPlugin({
+			manifestJson: markdownPluginV2Manifest,
+			wasmBytes: markdownPluginV2WasmBytes,
+		});
 		const fileId = "diff-preview-file";
 
 		await lix.db
