@@ -10,7 +10,7 @@
 		"build": "vite build",
 		"prebuild": "pnpm run build:lix",
 		"postinstall": "pnpm -C lix install",
-		"build:lix": "pnpm -C lix exec nx run-many --nx-bail --target=build --projects=@lix-js/inspector,@lix-js/plugin-md,@lix-js/react-utils,@lix-js/sdk",
+		"build:lix": "pnpm -C lix exec nx run-many --nx-bail --target=build --projects=@lix-js/plugin-md,@lix-js/react-utils,@lix-js/sdk",
 		"preview": "vite preview --strictPort --port 5173",
 		"typecheck": "tsc -p . --pretty false",
 		"format": "prettier --write .",
