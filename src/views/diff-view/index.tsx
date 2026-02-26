@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { LixProvider, useQuery } from "@lix-js/react-utils";
 import { selectWorkingDiff } from "@lix-js/sdk";
 import type { Lix } from "@lix-js/sdk";
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
+import { MARKDOWN_PLUGIN_KEY } from "@/lib/lix-plugin-keys";
 import { Diff as DiffIcon, Loader2 } from "lucide-react";
 import { Diff } from "@/components/diff";
 import "../markdown-view/style.css";
@@ -38,7 +38,7 @@ function DiffViewContent({ config }: DiffViewProps) {
 		if (!Array.isArray(rawDiffs) || rawDiffs.length === 0) return [];
 		return rawDiffs.map((diff) => ({
 			...diff,
-			plugin_key: diff.plugin_key ?? mdPlugin.key,
+			plugin_key: diff.plugin_key ?? MARKDOWN_PLUGIN_KEY,
 			before_snapshot_content: normalizeSnapshot(diff.before_snapshot_content),
 			after_snapshot_content: normalizeSnapshot(diff.after_snapshot_content),
 		}));
@@ -89,7 +89,7 @@ function emptyDiffQuery(lix: Lix) {
 				.coalesce(
 					eb.ref("after.plugin_key"),
 					eb.ref("before.plugin_key"),
-					eb.val(mdPlugin.key),
+					eb.val(MARKDOWN_PLUGIN_KEY),
 				)
 				.as("plugin_key"),
 		])

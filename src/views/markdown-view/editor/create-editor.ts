@@ -9,7 +9,7 @@ import {
 	tiptapDocToAst,
 } from "@opral/markdown-wc/tiptap";
 import { parseMarkdown, AstSchemas, normalizeAst } from "@opral/markdown-wc";
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
+import { MARKDOWN_PLUGIN_KEY } from "@/lib/lix-plugin-keys";
 import { handlePaste as defaultHandlePaste } from "./handle-paste";
 import { SlashCommandsExtension } from "./extensions/slash-commands";
 import { TableNavigationExtension } from "./extensions/table-navigation";
@@ -112,7 +112,7 @@ export function createEditor(args: CreateEditorArgs): Editor {
 						file_id: fileId,
 						schema_key: schemaKey,
 						schema_version: schemaVersion,
-						plugin_key: mdPlugin.key,
+						plugin_key: MARKDOWN_PLUGIN_KEY,
 						snapshot_content: normalizedNode,
 					})
 					.execute();
@@ -158,7 +158,7 @@ export function createEditor(args: CreateEditorArgs): Editor {
 					file_id: fileId as any,
 					schema_key: rootKey,
 					schema_version: rootVersion,
-					plugin_key: mdPlugin.key,
+					plugin_key: MARKDOWN_PLUGIN_KEY,
 					snapshot_content: { order },
 				})
 				.execute();
@@ -248,14 +248,14 @@ export function createEditor(args: CreateEditorArgs): Editor {
 								await trx
 									.deleteFrom("state")
 									.where("file_id", "=", fileId as any)
-									.where("plugin_key", "=", mdPlugin.key)
+									.where("plugin_key", "=", MARKDOWN_PLUGIN_KEY)
 									.where("entity_id", "not in", keepIds as any)
 									.execute();
 							} else {
 								await trx
 									.deleteFrom("state")
 									.where("file_id", "=", fileId as any)
-									.where("plugin_key", "=", mdPlugin.key)
+									.where("plugin_key", "=", MARKDOWN_PLUGIN_KEY)
 									.where("entity_id", "<>", "root")
 									.execute();
 							}

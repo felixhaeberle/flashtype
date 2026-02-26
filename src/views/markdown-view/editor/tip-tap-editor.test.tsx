@@ -16,7 +16,7 @@ import { KEY_VALUE_DEFINITIONS } from "@/hooks/key-value/schema";
 import { EditorProvider } from "./editor-context";
 import { AstSchemas } from "@opral/markdown-wc";
 import type { Editor } from "@tiptap/core";
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
+import { MARKDOWN_PLUGIN_KEY } from "@/lib/lix-plugin-keys";
 import { insertMarkdownSchemas } from "../../../lib/insert-markdown-schemas";
 import markdownPluginV2Manifest from "../../../../lix/packages/plugin-md-v2/manifest.json";
 import markdownPluginV2WasmRaw from "../../../../lix/target/wasm32-wasip2/release/plugin_md_v2.wasm?raw";
@@ -423,7 +423,7 @@ test("updates editor when switching to a version with different external state",
 			schema_key: rootKey,
 			file_id: fileId,
 			version_id: vB.id,
-			plugin_key: mdPlugin.key,
+			plugin_key: MARKDOWN_PLUGIN_KEY,
 			snapshot_content: { order: ["p1"] } as any,
 			schema_version: rootVer,
 		} as any)
@@ -435,7 +435,7 @@ test("updates editor when switching to a version with different external state",
 			schema_key: paraKey,
 			file_id: fileId,
 			version_id: vB.id,
-			plugin_key: mdPlugin.key,
+			plugin_key: MARKDOWN_PLUGIN_KEY,
 			snapshot_content: {
 				type: "paragraph",
 				data: { id: "p1" },
@@ -651,7 +651,7 @@ test("preserves main content when switching to a new version and back", async ()
 			entity_id: "root",
 			schema_key: rootKey,
 			file_id: fileId,
-			plugin_key: mdPlugin.key,
+			plugin_key: MARKDOWN_PLUGIN_KEY,
 			snapshot_content: { order: ["p1"] } as any,
 			schema_version: rootVer,
 		} as any)
@@ -662,7 +662,7 @@ test("preserves main content when switching to a new version and back", async ()
 			entity_id: "p1",
 			schema_key: paraKey,
 			file_id: fileId,
-			plugin_key: mdPlugin.key,
+			plugin_key: MARKDOWN_PLUGIN_KEY,
 			snapshot_content: {
 				type: "paragraph",
 				data: { id: "p1" },

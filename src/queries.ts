@@ -1,4 +1,4 @@
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
+import { MARKDOWN_PLUGIN_KEY } from "@/lib/lix-plugin-keys";
 import type { Lix } from "@lix-js/sdk";
 import { ebEntity, qb, sql } from "@lix-js/kysely";
 import { AstSchemas } from "@opral/markdown-wc";
@@ -140,7 +140,7 @@ export function selectCheckpoints({ lix }: { lix: Lix }) {
 				eb.fn
 					.sum<number>(
 						sql`CASE 
-                            WHEN change.plugin_key = ${sql.lit(mdPlugin.key)} 
+                            WHEN change.plugin_key = ${sql.lit(MARKDOWN_PLUGIN_KEY)} 
                              AND change.schema_key != ${sql.lit(AstSchemas.DocumentSchema["x-lix-key"])} 
                              AND change.snapshot_content IS NOT NULL 
                         THEN 1 ELSE 0 END`,
@@ -149,7 +149,7 @@ export function selectCheckpoints({ lix }: { lix: Lix }) {
 				eb.fn
 					.sum<number>(
 						sql`CASE 
-                            WHEN change.plugin_key = ${sql.lit(mdPlugin.key)} 
+                            WHEN change.plugin_key = ${sql.lit(MARKDOWN_PLUGIN_KEY)} 
                              AND change.schema_key != ${sql.lit(AstSchemas.DocumentSchema["x-lix-key"])} 
                              AND change.snapshot_content IS NULL 
                         THEN 1 ELSE 0 END`,
@@ -188,7 +188,7 @@ export function selectDiffCount({
 		.selectFrom("change_set_element")
 		.leftJoin("change", "change.id", "change_set_element.change_id")
 		.where("change_set_element.change_set_id", "=", changeSetId)
-		.where("change.plugin_key", "=", mdPlugin.key)
+		.where("change.plugin_key", "=", MARKDOWN_PLUGIN_KEY)
 		.where("change.schema_key", "!=", AstSchemas.DocumentSchema["x-lix-key"])
 		.select((eb) => [
 			eb.fn.count<number>("change.id").as("total"),

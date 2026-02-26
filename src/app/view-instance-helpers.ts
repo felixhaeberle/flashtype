@@ -1,5 +1,5 @@
 import { selectWorkingDiff } from "@lix-js/sdk";
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
+import { MARKDOWN_PLUGIN_KEY } from "@/lib/lix-plugin-keys";
 import type { DiffViewConfig, RenderableDiff, ViewKind } from "./types";
 
 export const FILES_VIEW_KIND = "flashtype_files" as ViewKind;
@@ -84,7 +84,7 @@ export function createWorkingVsCheckpointDiffConfig(
 						.coalesce(
 							eb.ref("after.plugin_key"),
 							eb.ref("before.plugin_key"),
-							eb.val(mdPlugin.key),
+							eb.val(MARKDOWN_PLUGIN_KEY),
 						)
 						.as("plugin_key"),
 				])

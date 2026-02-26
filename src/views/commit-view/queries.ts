@@ -1,4 +1,4 @@
-import { plugin as mdPlugin } from "@lix-js/plugin-md";
+import { MARKDOWN_PLUGIN_KEY } from "@/lib/lix-plugin-keys";
 import type { Lix } from "@lix-js/sdk";
 import { qb, sql } from "@lix-js/kysely";
 import { AstSchemas } from "@opral/markdown-wc";
@@ -42,7 +42,7 @@ export function selectCheckpointFiles({
 		.innerJoin("change", "change.id", "change_set_element.change_id")
 		.leftJoin("file", "file.id", "change_set_element.file_id")
 		.where("change_set_element.change_set_id", "=", changeSetId)
-		.where("change.plugin_key", "=", mdPlugin.key)
+		.where("change.plugin_key", "=", MARKDOWN_PLUGIN_KEY)
 		.where("change.schema_key", "!=", AstSchemas.DocumentSchema["x-lix-key"])
 		.groupBy(["change_set_element.file_id"])
 		.select((eb) => [
