@@ -145,6 +145,9 @@ const DEFAULT_PANEL_FALLBACK_SIZES = {
 };
 const MIN_UNCOLLAPSED_RIGHT_SIZE = 35;
 const MIN_VISIBLE_PANEL_SIZE = 1;
+const INSTALLED_WIDGET_PATH_LIKE = "/.lix/app_data/flashtype/widgets/%";
+const INSTALLED_WIDGET_OBSERVE_SQL =
+	"SELECT path, data FROM file_by_version WHERE lixcol_version_id = ? AND path LIKE ?";
 const PANEL_TRANSITION_STYLE: CSSProperties = {
 	transitionProperty: "flex-grow, flex-basis",
 	transitionDuration: "200ms",
@@ -268,22 +271,73 @@ function LayoutShellContent() {
 
 	useEffect(() => {
 		let cancelled = false;
-		(async () => {
+		let debounceId: number | null = null;
+		let reloadPromise: Promise<void> | null = null;
+
+		const reloadInstalledWidgets = async () => {
+			if (reloadPromise) {
+				await reloadPromise;
+				return;
+			}
+			reloadPromise = (async () => {
+				try {
+					const installed = await loadInstalledWidgetsFromLix(lix);
+					if (!cancelled) {
+						replaceInstalledWidgets(installed);
+					}
+				} catch (error) {
+					console.warn("[widget-loader] failed to load installed widgets", error);
+					if (!cancelled) {
+						clearInstalledWidgets();
+					}
+				}
+			})();
 			try {
-				const installed = await loadInstalledWidgetsFromLix(lix);
-				if (!cancelled) {
-					replaceInstalledWidgets(installed);
+				await reloadPromise;
+			} finally {
+				reloadPromise = null;
+			}
+		};
+
+		const scheduleReload = () => {
+			if (cancelled) return;
+			if (debounceId !== null) {
+				window.clearTimeout(debounceId);
+			}
+			debounceId = window.setTimeout(() => {
+				debounceId = null;
+				void reloadInstalledWidgets();
+			}, 150);
+		};
+
+		void reloadInstalledWidgets();
+
+		const observeEvents = lix.observe({
+			sql: INSTALLED_WIDGET_OBSERVE_SQL,
+			params: ["global", INSTALLED_WIDGET_PATH_LIKE],
+		});
+
+		void (async () => {
+			try {
+				while (!cancelled) {
+					const event = await observeEvents.next();
+					if (cancelled || !event) break;
+					scheduleReload();
 				}
 			} catch (error) {
-				console.warn("[widget-loader] failed to load installed widgets", error);
 				if (!cancelled) {
-					clearInstalledWidgets();
+					console.warn("[widget-loader] observe failed", error);
 				}
 			}
 		})();
 
 		return () => {
 			cancelled = true;
+			if (debounceId !== null) {
+				window.clearTimeout(debounceId);
+				debounceId = null;
+			}
+			observeEvents.close();
 		};
 	}, [lix, replaceInstalledWidgets, clearInstalledWidgets]);
 
