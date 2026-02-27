@@ -5,7 +5,10 @@
 	"type": "module",
 	"packageManager": "pnpm@10.13.1",
 	"scripts": {
-		"dev": "vite",
+		"dev": "concurrently -k \"pnpm run dev:renderer\" \"pnpm run dev:electron\"",
+		"dev:renderer": "vite --host 127.0.0.1 --port 4173 --strictPort",
+		"dev:electron": "wait-on tcp:4173 && VITE_DEV_SERVER_URL=http://127.0.0.1:4173 electron ./electron/main.mjs",
+		"dev:web": "vite",
 		"predev": "pnpm run build:lix",
 		"build": "vite build",
 		"prebuild": "pnpm run build:lix",
@@ -28,9 +31,9 @@
 		"@lix-js/kysely": "workspace:*",
 		"@lix-js/react-utils": "workspace:*",
 		"@lix-js/sdk": "workspace:*",
+		"@openrouter/ai-sdk-provider": "^1.2.0",
 		"@opral/markdown-wc": "0.6.0",
 		"@opral/zettel-ast": "0.1.0",
-		"@openrouter/ai-sdk-provider": "^1.2.0",
 		"@radix-ui/react-avatar": "^1.1.10",
 		"@radix-ui/react-collapsible": "^1.1.12",
 		"@radix-ui/react-dialog": "^1.1.15",
@@ -68,6 +71,8 @@
 		"@types/react-syntax-highlighter": "^15.5.13",
 		"@vitejs/plugin-react": "^5.0.2",
 		"babel-plugin-react-compiler": "^1.0.0",
+		"concurrently": "^9.2.1",
+		"electron": "^40.6.1",
 		"happy-dom": "^18.0.1",
 		"oxlint": "^1.23.0",
 		"prettier": "^3.6.2",
@@ -75,6 +80,7 @@
 		"tw-animate-css": "^1.3.7",
 		"typescript": "^5.9.2",
 		"vite": "^7.1.3",
-		"vitest": "^4.0.3"
+		"vitest": "^4.0.3",
+		"wait-on": "^9.0.4"
 	}
 }

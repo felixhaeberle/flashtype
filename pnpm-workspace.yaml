@@ -1,7 +1,10 @@
 packages:
-  - "."
-  - "lix"
-  - "lix/packages/js-sdk"
-  - "lix/packages/js-kysely"
-  - "lix/packages/react-utils"
-  - "!lix/packages/**/dist"
+  - .
+  - lix
+  - lix/packages/js-sdk
+  - lix/packages/js-kysely
+  - lix/packages/react-utils
+  - '!lix/packages/**/dist'
+
+onlyBuiltDependencies:
+  - electron
