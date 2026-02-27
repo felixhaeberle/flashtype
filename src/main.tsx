@@ -6,7 +6,7 @@ import type { Lix } from "@lix-js/sdk";
 import { KeyValueProvider } from "./hooks/key-value/use-key-value";
 import { KEY_VALUE_DEFINITIONS } from "./hooks/key-value/schema";
 import { ErrorFallback } from "./main.error";
-import { V2LayoutShell } from "./app/layout-shell";
+import { V2LayoutShell } from "./shell/layout-shell";
 import { openDesktopLix } from "./lib/lix-client";
 import markdownPluginV2ArchiveUrl from "../lix/packages/plugin-md-v2/plugin-md-v2.lixplugin?url";
 

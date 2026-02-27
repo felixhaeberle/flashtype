@@ -1,4 +1,4 @@
-import type { RenderableDiff } from "@/app/types";
+import type { RenderableDiff } from "@/widget-runtime/types";
 
 export function Diff(props: {
 	diffs: RenderableDiff[];

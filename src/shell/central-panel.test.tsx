@@ -1,0 +1,170 @@
+import { Suspense, act, type ReactNode } from "react";
+import { markdownPluginV2ArchiveBytes } from "@/test-utils/plugin-md-v2-archive";
+import { DndContext } from "@dnd-kit/core";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { CentralPanel } from "./central-panel";
+import type { PanelState, WidgetContext } from "../widget-runtime/types";
+import { openLix } from "@lix-js/sdk";
+import { WidgetHostRegistryProvider } from "../widget-runtime/widget-host-registry";
+import { SEARCH_WIDGET_KIND } from "../widget-runtime/widget-instance-helpers";
+
+vi.mock("../widget-runtime/widget-registry", () => {
+	const definitions = [
+		{
+			kind: "flashtype_search" as const,
+			label: "Search",
+			description: "Search view",
+			icon: () => <svg></svg>,
+			render: ({
+				context,
+				target,
+			}: {
+				context: WidgetContext;
+				target: HTMLElement;
+			}) => {
+				const input = document.createElement("input");
+				input.setAttribute("data-testid", "search-view-input");
+				input.setAttribute("placeholder", "Search project...");
+				input.addEventListener("pointerdown", () => {
+					context.openWidget?.({
+						panel: "central",
+						kind: "flashtype_search",
+						instance: "search-view",
+						focus: false,
+					});
+				});
+				target.replaceChildren(input);
+				return () => {
+					target.replaceChildren();
+				};
+			},
+		},
+	];
+	return {
+		WIDGET_DEFINITIONS: definitions,
+		WIDGET_MAP: new Map(definitions.map((def) => [def.kind, def])),
+	};
+});
+
+let lix: Awaited<ReturnType<typeof openLix>> | null = null;
+
+beforeAll(async () => {
+	lix = await openLix();
+	await lix.installPlugin({
+		archiveBytes: markdownPluginV2ArchiveBytes,
+	});
+});
+
+afterAll(async () => {
+	await lix?.close();
+	lix = null;
+});
+
+const renderWithProviders = async (ui: ReactNode) => {
+	let result: ReturnType<typeof render> | undefined;
+	await act(async () => {
+		result = render(
+			<WidgetHostRegistryProvider>
+				<Suspense fallback={<div data-testid="loading-state" />}>{ui}</Suspense>
+			</WidgetHostRegistryProvider>,
+		);
+	});
+	return result!;
+};
+
+const createViewContext = (
+	overrides: Partial<WidgetContext> = {},
+): WidgetContext => ({
+	lix:
+		lix ??
+		(() => {
+			throw new Error("Lix instance not initialized");
+		})(),
+	isPanelFocused: false,
+	setTabBadgeCount: () => {},
+	...overrides,
+});
+
+describe("CentralPanel", () => {
+	test("renders the active view and wires tab selection", async () => {
+		const panelState: PanelState = {
+			views: [{ instance: "search-1", kind: SEARCH_WIDGET_KIND }],
+			activeInstance: "search-1",
+		};
+		const handleSelect = vi.fn();
+
+		await renderWithProviders(
+			<DndContext>
+				<CentralPanel
+					panel={panelState}
+					onSelectWidget={handleSelect}
+					onRemoveWidget={() => {}}
+					viewContext={createViewContext({ isPanelFocused: true })}
+					isFocused={true}
+					onFocusPanel={vi.fn()}
+				/>
+			</DndContext>,
+		);
+
+		expect(await screen.findByTestId("search-view-input")).toBeInTheDocument();
+
+		const tabButton = await screen.findByRole("button", { name: "Search" });
+		fireEvent.click(tabButton);
+
+		expect(handleSelect).toHaveBeenCalledWith("search-1");
+		expect(tabButton.getAttribute("data-focused")).toBe("true");
+	});
+
+	test("active tab is not focused when panel loses focus", async () => {
+		const panelState: PanelState = {
+			views: [{ instance: "search-1", kind: SEARCH_WIDGET_KIND }],
+			activeInstance: "search-1",
+		};
+
+		await renderWithProviders(
+			<DndContext>
+				<CentralPanel
+					panel={panelState}
+					onSelectWidget={() => {}}
+					onRemoveWidget={() => {}}
+					viewContext={createViewContext()}
+					isFocused={false}
+					onFocusPanel={vi.fn()}
+				/>
+			</DndContext>,
+		);
+
+		const tabButton = await screen.findByRole("button", { name: "Search" });
+		expect(tabButton.getAttribute("data-focused")).toBeNull();
+	});
+
+	test("finalizes pending view when interacting with content", async () => {
+		const panelState: PanelState = {
+			views: [
+				{ instance: "search-1", kind: SEARCH_WIDGET_KIND, isPending: true },
+			],
+			activeInstance: "search-1",
+		};
+		const handleFinalize = vi.fn();
+
+		await renderWithProviders(
+			<DndContext>
+				<CentralPanel
+					panel={panelState}
+					onSelectWidget={() => {}}
+					onRemoveWidget={() => {}}
+					viewContext={createViewContext({ isPanelFocused: true })}
+					isFocused={true}
+					onFocusPanel={vi.fn()}
+					onFinalizePendingView={handleFinalize}
+				/>
+			</DndContext>,
+		);
+
+		const input = await screen.findByTestId("search-view-input");
+		fireEvent.pointerDown(input);
+
+		expect(handleFinalize).toHaveBeenCalledWith("search-1");
+	});
+});

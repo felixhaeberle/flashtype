@@ -1,7 +1,7 @@
 import {
 	DEFAULT_FLASHTYPE_UI_STATE,
 	type FlashtypeUiState,
-} from "@/app/ui-state";
+} from "@/shell/ui-state";
 
 export type KeyValueVersionId = "active" | "global" | string;
 
