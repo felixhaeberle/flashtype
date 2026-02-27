@@ -1,8 +1,15 @@
 import { useCallback, useState, type JSX } from "react";
-import { ClipboardPaste, FilePlus, FolderOpen, Files, Zap } from "lucide-react";
+import {
+	ClipboardPaste,
+	FilePlus,
+	FolderOpen,
+	Files,
+	TerminalSquare,
+	Zap,
+} from "lucide-react";
 import { ActionButton } from "@/components/ui/action-button";
 import type { ViewContext } from "./types";
-import { FILES_VIEW_KIND } from "./view-instance-helpers";
+import { FILES_VIEW_KIND, TERMINAL_VIEW_KIND } from "./view-instance-helpers";
 import { importFromClipboard, importFromComputer } from "./import-file";
 import { seedStarterContent } from "@/seed";
 
@@ -46,6 +53,14 @@ function LandingScreenContent({
 		} catch (error) {
 			console.error("Failed to open file:", error);
 		}
+	}, [context]);
+
+	const handleOpenTerminal = useCallback(() => {
+		context.openView?.({
+			panel: "central",
+			kind: TERMINAL_VIEW_KIND,
+			focus: true,
+		});
 	}, [context]);
 
 	const handleSeedStarterFiles = useCallback(async () => {
@@ -113,8 +128,16 @@ function LandingScreenContent({
 						ariaLabel="Open file from computer"
 					/>
 					<ActionButton
+						icon={<TerminalSquare className="size-6" />}
+						label="Open terminal"
+						onClick={handleOpenTerminal}
+						ariaLabel="Open terminal"
+					/>
+					<ActionButton
 						icon={<FilePlus className="size-6" />}
-						label={isSeeding ? "Seeding starter files..." : "Seed starter files"}
+						label={
+							isSeeding ? "Seeding starter files..." : "Seed starter files"
+						}
 						onClick={() => {
 							void handleSeedStarterFiles();
 						}}

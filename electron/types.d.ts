@@ -120,11 +120,45 @@ export type DesktopLixApi = {
 	wipe(): Promise<void>;
 };
 
+export type DesktopTerminalCreatePayload = {
+	cwd?: string;
+	shell?: string;
+	cols?: number;
+	rows?: number;
+};
+
+export type DesktopTerminalCreateResult = {
+	id: string;
+};
+
+export type DesktopTerminalDataEvent = {
+	id: string;
+	data: string;
+};
+
+export type DesktopTerminalExitEvent = {
+	id: string;
+	exitCode: number | null;
+	signal: number | null;
+};
+
+export type DesktopTerminalApi = {
+	create(
+		payload?: DesktopTerminalCreatePayload,
+	): Promise<DesktopTerminalCreateResult>;
+	write(payload: { id: string; data: string }): Promise<void>;
+	resize(payload: { id: string; cols: number; rows: number }): Promise<void>;
+	kill(payload: { id: string }): Promise<void>;
+	onData(listener: (event: DesktopTerminalDataEvent) => void): () => void;
+	onExit(listener: (event: DesktopTerminalExitEvent) => void): () => void;
+};
+
 declare global {
 	interface Window {
 		flashtypeDesktop?: {
 			platform: string;
 			lix: DesktopLixApi;
+			terminal: DesktopTerminalApi;
 		};
 	}
 }

@@ -54,6 +54,7 @@ import {
 	FILE_VIEW_KIND,
 } from "./view-instance-helpers";
 import {
+	coerceFlashtypeUiState,
 	DEFAULT_FLASHTYPE_UI_STATE,
 	FLASHTYPE_UI_STATE_KEY,
 	normalizeLayoutSizes,
@@ -183,8 +184,13 @@ export function V2LayoutShell() {
  */
 function LayoutShellContent() {
 	const [uiStateKV, setUiStateKV] = useKeyValue(FLASHTYPE_UI_STATE_KEY);
+	const [themePreference] = useKeyValue("flashtype_theme");
+	const theme = themePreference === "dark" ? "dark" : "light";
 	const lix = useLix();
-	const uiState = uiStateKV ?? DEFAULT_FLASHTYPE_UI_STATE;
+	const uiState = useMemo(
+		() => coerceFlashtypeUiState(uiStateKV ?? DEFAULT_FLASHTYPE_UI_STATE),
+		[uiStateKV],
+	);
 
 	const initialLayoutSizes = normalizeLayoutSizes(uiState.layout?.sizes);
 	const sanitizedPersistedPanels = useMemo(
@@ -228,6 +234,12 @@ function LayoutShellContent() {
 	const leftPanelRef = useRef<ImperativePanelHandle | null>(null);
 	const rightPanelRef = useRef<ImperativePanelHandle | null>(null);
 	const viewHostRegistry = useViewHostRegistry();
+
+	useEffect(() => {
+		const root = document.documentElement;
+		root.dataset.theme = theme;
+		root.classList.toggle("dark", theme === "dark");
+	}, [theme]);
 
 	const activeInstances = useMemo(() => {
 		const keys = new Set<string>();

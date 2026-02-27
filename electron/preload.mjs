@@ -23,7 +23,29 @@ const lix = {
 	wipe: () => ipcRenderer.invoke("lix:wipe"),
 };
 
+const terminal = {
+	create: (payload) => ipcRenderer.invoke("terminal:create", payload),
+	write: (payload) => ipcRenderer.invoke("terminal:write", payload),
+	resize: (payload) => ipcRenderer.invoke("terminal:resize", payload),
+	kill: (payload) => ipcRenderer.invoke("terminal:kill", payload),
+	onData: (listener) => {
+		const wrapped = (_event, payload) => listener(payload);
+		ipcRenderer.on("terminal:data", wrapped);
+		return () => {
+			ipcRenderer.off("terminal:data", wrapped);
+		};
+	},
+	onExit: (listener) => {
+		const wrapped = (_event, payload) => listener(payload);
+		ipcRenderer.on("terminal:exit", wrapped);
+		return () => {
+			ipcRenderer.off("terminal:exit", wrapped);
+		};
+	},
+};
+
 contextBridge.exposeInMainWorld("flashtypeDesktop", {
 	platform: process.platform,
 	lix,
+	terminal,
 });

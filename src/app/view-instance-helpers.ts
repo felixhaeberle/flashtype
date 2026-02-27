@@ -10,6 +10,7 @@ export const FILE_VIEW_KIND = "flashtype_file" as ViewKind;
 export const DIFF_VIEW_KIND = "flashtype_diff" as ViewKind;
 export const COMMIT_VIEW_KIND = "flashtype_commit" as ViewKind;
 export const HISTORY_VIEW_KIND = "flashtype_history" as ViewKind;
+export const TERMINAL_VIEW_KIND = "flashtype_terminal" as ViewKind;
 
 export const fileViewInstance = (fileId: string): string =>
 	`${FILE_VIEW_KIND}:${fileId}`;

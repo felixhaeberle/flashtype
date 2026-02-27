@@ -58,6 +58,90 @@ export const DEFAULT_FLASHTYPE_UI_STATE: FlashtypeUiState = {
 	},
 	layout: { sizes: { ...DEFAULT_LAYOUT_SIZES } },
 };
+
+function isPanelSide(value: unknown): value is PanelSide {
+	return value === "left" || value === "central" || value === "right";
+}
+
+function isViewInstance(value: unknown): value is PanelState["views"][number] {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const candidate = value as Record<string, unknown>;
+	return (
+		typeof candidate.instance === "string" &&
+		typeof candidate.kind === "string" &&
+		(candidate.isPending === undefined ||
+			typeof candidate.isPending === "boolean")
+	);
+}
+
+function coercePanelState(raw: unknown, fallback: PanelState): PanelState {
+	if (!raw || typeof raw !== "object") {
+		return fallback;
+	}
+	const candidate = raw as Record<string, unknown>;
+	const views = Array.isArray(candidate.views)
+		? candidate.views.filter(isViewInstance)
+		: fallback.views;
+	const activeInstance =
+		typeof candidate.activeInstance === "string" ||
+		candidate.activeInstance === null
+			? candidate.activeInstance
+			: fallback.activeInstance;
+	return { views, activeInstance };
+}
+
+/**
+ * Coerces persisted key-value payloads into a safe `FlashtypeUiState`.
+ *
+ * Falls back to defaults for stale/invalid shapes so app boot does not crash.
+ */
+export function coerceFlashtypeUiState(raw: unknown): FlashtypeUiState {
+	if (!raw || typeof raw !== "object") {
+		return DEFAULT_FLASHTYPE_UI_STATE;
+	}
+
+	const candidate = raw as Record<string, unknown>;
+	const panelsCandidate =
+		candidate.panels && typeof candidate.panels === "object"
+			? (candidate.panels as Record<string, unknown>)
+			: {};
+	const layoutCandidate =
+		candidate.layout && typeof candidate.layout === "object"
+			? (candidate.layout as Record<string, unknown>)
+			: {};
+
+	const focusedPanel = isPanelSide(candidate.focusedPanel)
+		? candidate.focusedPanel
+		: DEFAULT_FLASHTYPE_UI_STATE.focusedPanel;
+
+	return {
+		focusedPanel,
+		panels: {
+			left: coercePanelState(
+				panelsCandidate.left,
+				DEFAULT_FLASHTYPE_UI_STATE.panels.left,
+			),
+			central: coercePanelState(
+				panelsCandidate.central,
+				DEFAULT_FLASHTYPE_UI_STATE.panels.central,
+			),
+			right: coercePanelState(
+				panelsCandidate.right,
+				DEFAULT_FLASHTYPE_UI_STATE.panels.right,
+			),
+		},
+		layout: {
+			sizes: normalizeLayoutSizes(
+				(layoutCandidate.sizes as
+					| Partial<Record<PanelSide, number>>
+					| undefined) ?? undefined,
+			),
+		},
+	};
+}
+
 export function normalizeLayoutSizes(
 	sizes?: Partial<Record<PanelSide, number>>,
 ): PanelLayoutSizes {
@@ -67,6 +151,3 @@ export function normalizeLayoutSizes(
 		right: sizes?.right ?? DEFAULT_LAYOUT_SIZES.right,
 	};
 }
-
-// Persistence helpers rely on trusted writers via `useKeyValue`, so no runtime
-// shape guard is exported yet.

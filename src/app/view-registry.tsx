@@ -7,6 +7,7 @@ import { view as historyViewDefinition } from "../views/history-view";
 import { view as markdownViewDefinition } from "../views/markdown-view";
 import { view as commitViewDefinition } from "../views/commit-view";
 import { view as diffViewDefinition } from "../views/diff-view";
+import { view as terminalViewDefinition } from "../views/terminal-view";
 
 const VISIBLE_VIEWS: ViewDefinition[] = [
 	filesViewDefinition,
@@ -14,6 +15,7 @@ const VISIBLE_VIEWS: ViewDefinition[] = [
 	tasksViewDefinition,
 	checkpointViewDefinition,
 	historyViewDefinition,
+	terminalViewDefinition,
 ];
 
 const HIDDEN_VIEWS: ViewDefinition[] = [

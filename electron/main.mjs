@@ -2,9 +2,11 @@ import { app, BrowserWindow, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { disposeLixIpc, registerLixIpc } from "./ipc-lix.mjs";
+import { disposeTerminalIpc, registerTerminalIpc } from "./ipc-terminal.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:4173";
+const DEV_SERVER_URL =
+	process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:4173";
 
 function createMainWindow() {
 	const window = new BrowserWindow({
@@ -40,6 +42,7 @@ function createMainWindow() {
 
 app.whenReady().then(() => {
 	registerLixIpc();
+	registerTerminalIpc();
 	createMainWindow();
 
 	app.on("activate", () => {
@@ -57,4 +60,5 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
 	void disposeLixIpc();
+	disposeTerminalIpc();
 });
