@@ -29,7 +29,7 @@ import type {
 	WidgetInstance,
 	WidgetKind,
 } from "../widget-runtime/types";
-import { WIDGET_MAP } from "../widget-runtime/widget-registry";
+import { useWidgetRegistry } from "../widget-runtime/widget-registry";
 import styles from "./panel.module.css";
 import { useWidgetContext } from "../widget-runtime/widget-context";
 import { useWidgetHostRegistry, type WidgetHostRecord } from "../widget-runtime/widget-host-registry";
@@ -66,6 +66,7 @@ export function PanelV2({
 	dropId,
 	viewOverrides,
 }: PanelV2Props) {
+	const { widgetMap } = useWidgetRegistry();
 	const { setNodeRef, isOver } = useDroppable({
 		id: dropId ?? `${side}-panel`,
 		data: { panel: side },
@@ -81,9 +82,9 @@ export function PanelV2({
 			const override = viewOverrides?.find(
 				(candidate) => candidate.kind === kind,
 			);
-			return override ?? WIDGET_MAP.get(kind) ?? null;
+			return override ?? widgetMap.get(kind) ?? null;
 		},
-		[viewOverrides],
+		[viewOverrides, widgetMap],
 	);
 
 	const hasViews = panel.views.length > 0;

@@ -14,7 +14,7 @@ import type {
 	WidgetContext,
 	WidgetDefinition,
 } from "../widget-runtime/types";
-import { WIDGET_DEFINITIONS } from "../widget-runtime/widget-registry";
+import { useWidgetRegistry } from "../widget-runtime/widget-registry";
 import { PanelV2 } from "./panel-v2";
 
 interface SidePanelProps {
@@ -47,6 +47,7 @@ export function SidePanel({
 	isFocused,
 	onFocusPanel,
 }: SidePanelProps) {
+	const { visibleWidgets } = useWidgetRegistry();
 	const panelViewKindSignature = useMemo(() => {
 		if (panel.views.length === 0) {
 			return "";
@@ -57,11 +58,11 @@ export function SidePanel({
 
 	const availableViews = useMemo(() => {
 		if (panelViewKindSignature === "") {
-			return WIDGET_DEFINITIONS;
+			return visibleWidgets;
 		}
 		const activeInstances = new Set(panelViewKindSignature.split("|"));
-		return WIDGET_DEFINITIONS.filter((view) => !activeInstances.has(view.kind));
-	}, [panelViewKindSignature]);
+		return visibleWidgets.filter((view) => !activeInstances.has(view.kind));
+	}, [panelViewKindSignature, visibleWidgets]);
 	const canAddMoreViews = availableViews.length > 0;
 
 	const addViewButton = canAddMoreViews ? (
@@ -129,9 +130,10 @@ function EmptyPanelState({
 	onAddView,
 	availableViews,
 }: EmptyPanelStateProps) {
+	const { visibleWidgets } = useWidgetRegistry();
 	const Icon = side === "left" ? PanelLeft : PanelRight;
 	const panelName = side === "left" ? "Left" : "Right";
-	const menuViews = availableViews ?? WIDGET_DEFINITIONS;
+	const menuViews = availableViews ?? visibleWidgets;
 
 	return (
 		<div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">

@@ -106,6 +106,13 @@ vi.mock("../widget-runtime/widget-registry", async () => {
 	return {
 		WIDGET_DEFINITIONS: definitions,
 		WIDGET_MAP: new Map(definitions.map((def) => [def.kind, def])),
+		useWidgetRegistry: () => ({
+			visibleWidgets: definitions,
+			widgetMap: new Map(definitions.map((def) => [def.kind, def])),
+			installedWidgets: [],
+			replaceInstalledWidgets: () => {},
+			clearInstalledWidgets: () => {},
+		}),
 	};
 });
 

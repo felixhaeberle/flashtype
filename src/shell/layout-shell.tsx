@@ -41,8 +41,13 @@ import type {
 	WidgetKind,
 	WidgetLaunchArgs,
 	WidgetState,
+	WidgetDefinition,
 } from "../widget-runtime/types";
-import { createWidgetInstanceId, WIDGET_MAP } from "../widget-runtime/widget-registry";
+import {
+	createWidgetInstanceId,
+	WidgetRegistryProvider,
+	useWidgetRegistry,
+} from "../widget-runtime/widget-registry";
 import { PanelTabPreview } from "./panel-v2";
 import {
 	buildFileWidgetProps,
@@ -86,10 +91,13 @@ const sanitizePanels = (
 	},
 });
 
-const hydratePanel = (panel: PanelState): PanelState => {
+const hydratePanel = (
+	panel: PanelState,
+	widgetMap: Map<WidgetKind, WidgetDefinition>,
+): PanelState => {
 	const views = panel.views
 		// Drop unknown view keys that might linger in persisted UI state.
-		.filter((view) => WIDGET_MAP.has(view.kind))
+		.filter((view) => widgetMap.has(view.kind))
 		.map(upgradeDiffProps);
 	if (views.length === 0) {
 		return { views, activeInstance: null };
@@ -170,9 +178,11 @@ function deriveUntitledMarkdownPath(existingPaths: Set<string>): string {
 
 export function V2LayoutShell() {
 	return (
-		<WidgetHostRegistryProvider>
-			<LayoutShellContent />
-		</WidgetHostRegistryProvider>
+		<WidgetRegistryProvider>
+			<WidgetHostRegistryProvider>
+				<LayoutShellContent />
+			</WidgetHostRegistryProvider>
+		</WidgetRegistryProvider>
 	);
 }
 
@@ -183,6 +193,7 @@ export function V2LayoutShell() {
  * <V2LayoutShell />
  */
 function LayoutShellContent() {
+	const { widgetMap } = useWidgetRegistry();
 	const [uiStateKV, setUiStateKV] = useKeyValue(FLASHTYPE_UI_STATE_KEY);
 	const [themePreference] = useKeyValue("flashtype_theme");
 	const theme = themePreference === "dark" ? "dark" : "light";
@@ -199,13 +210,13 @@ function LayoutShellContent() {
 	);
 
 	const [leftPanel, setLeftPanel] = useState<PanelState>(() =>
-		hydratePanel(sanitizedPersistedPanels.left),
+		hydratePanel(sanitizedPersistedPanels.left, widgetMap),
 	);
 	const [centralPanel, setCentralPanel] = useState<PanelState>(() =>
-		hydratePanel(sanitizedPersistedPanels.central),
+		hydratePanel(sanitizedPersistedPanels.central, widgetMap),
 	);
 	const [rightPanel, setRightPanel] = useState<PanelState>(() =>
-		hydratePanel(sanitizedPersistedPanels.right),
+		hydratePanel(sanitizedPersistedPanels.right, widgetMap),
 	);
 	const [focusedPanel, setFocusedPanel] = useState<PanelSide>(
 		() => uiState.focusedPanel,
@@ -295,17 +306,17 @@ function LayoutShellContent() {
 		setLeftPanel((prev) =>
 			prev === sanitizedPersistedPanels.left
 				? prev
-				: hydratePanel(sanitizedPersistedPanels.left),
+				: hydratePanel(sanitizedPersistedPanels.left, widgetMap),
 		);
 		setCentralPanel((prev) =>
 			prev === sanitizedPersistedPanels.central
 				? prev
-				: hydratePanel(sanitizedPersistedPanels.central),
+				: hydratePanel(sanitizedPersistedPanels.central, widgetMap),
 		);
 		setRightPanel((prev) =>
 			prev === sanitizedPersistedPanels.right
 				? prev
-				: hydratePanel(sanitizedPersistedPanels.right),
+				: hydratePanel(sanitizedPersistedPanels.right, widgetMap),
 		);
 		setFocusedPanel((prev) =>
 			prev === uiStateKV.focusedPanel ? prev : uiStateKV.focusedPanel,
@@ -328,7 +339,13 @@ function LayoutShellContent() {
 				pendingPersistRef.current = null;
 			}
 		});
-	}, [uiStateKV, sanitizedPersistedPanels, updateDerivedPanelState]);
+	}, [uiStateKV, sanitizedPersistedPanels, updateDerivedPanelState, widgetMap]);
+
+	useEffect(() => {
+		setLeftPanel((current) => hydratePanel(current, widgetMap));
+		setCentralPanel((current) => hydratePanel(current, widgetMap));
+		setRightPanel((current) => hydratePanel(current, widgetMap));
+	}, [widgetMap]);
 
 	useEffect(() => {
 		if (hydratingRef.current) return;
@@ -374,7 +391,7 @@ function LayoutShellContent() {
 			options: { focus?: boolean } = {},
 		) => {
 			const applyReducer = (prev: PanelState) =>
-				hydratePanel(reducer(hydratePanel(prev)));
+				hydratePanel(reducer(hydratePanel(prev, widgetMap)), widgetMap);
 			if (side === "left") {
 				setLeftPanel(applyReducer);
 			} else if (side === "central") {
@@ -386,7 +403,7 @@ function LayoutShellContent() {
 				setFocusedPanel((prev) => (prev === side ? prev : side));
 			}
 		},
-		[setLeftPanel, setCentralPanel, setRightPanel, setFocusedPanel],
+		[setLeftPanel, setCentralPanel, setRightPanel, setFocusedPanel, widgetMap],
 	);
 
 	const schedulePanelAnimation = useCallback(() => {
@@ -732,7 +749,7 @@ function LayoutShellContent() {
 			].find((view) => view.instance === activeId)
 		: null;
 	const activeDragView = activeDragData
-		? WIDGET_MAP.get(activeDragData.kind)
+		? widgetMap.get(activeDragData.kind)
 		: null;
 
 	const handleCreateNewFile = useCallback(async () => {
@@ -783,10 +800,10 @@ function LayoutShellContent() {
 		}
 		return (
 			(activeCentralEntry.state?.flashtype?.label as string | undefined) ??
-			WIDGET_MAP.get(activeCentralEntry.kind)?.label ??
+			widgetMap.get(activeCentralEntry.kind)?.label ??
 			null
 		);
-	}, [activeCentralEntry]);
+	}, [activeCentralEntry, widgetMap]);
 
 	const isLeftFocused = focusedPanel === "left";
 	const isCentralFocused = focusedPanel === "central";

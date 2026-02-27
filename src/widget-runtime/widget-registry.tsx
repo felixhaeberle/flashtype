@@ -1,34 +1,98 @@
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useMemo,
+	useState,
+	type ReactNode,
+} from "react";
 import type { WidgetDefinition, WidgetKind } from "./types";
-import { widget as filesWidgetDefinition } from "../widgets/files";
-import { widget as searchWidgetDefinition } from "../widgets/search";
-import { widget as tasksWidgetDefinition } from "../widgets/tasks";
-import { widget as checkpointWidgetDefinition } from "../widgets/checkpoint";
-import { widget as historyWidgetDefinition } from "../widgets/history";
-import { widget as markdownWidgetDefinition } from "../widgets/markdown";
-import { widget as commitWidgetDefinition } from "../widgets/commit";
-import { widget as diffWidgetDefinition } from "../widgets/diff";
-import { widget as terminalWidgetDefinition } from "../widgets/terminal";
+import {
+	BUILTIN_VISIBLE_WIDGET_DEFINITIONS,
+	BUILTIN_WIDGET_DEFINITIONS,
+} from "./builtin-widget-registry";
+import { normalizeInstalledWidgetDefinitions } from "./installed-widget-registry";
 
-const VISIBLE_WIDGETS: WidgetDefinition[] = [
-	filesWidgetDefinition,
-	searchWidgetDefinition,
-	tasksWidgetDefinition,
-	checkpointWidgetDefinition,
-	historyWidgetDefinition,
-	terminalWidgetDefinition,
-];
+type WidgetRegistryValue = {
+	readonly visibleWidgets: WidgetDefinition[];
+	readonly widgetMap: Map<WidgetKind, WidgetDefinition>;
+	readonly installedWidgets: WidgetDefinition[];
+	replaceInstalledWidgets: (definitions: readonly WidgetDefinition[]) => void;
+	clearInstalledWidgets: () => void;
+};
 
-const HIDDEN_WIDGETS: WidgetDefinition[] = [
-	markdownWidgetDefinition,
-	commitWidgetDefinition,
-	diffWidgetDefinition,
-];
+const buildWidgetRegistry = (
+	installedDefinitions: readonly WidgetDefinition[],
+): Pick<WidgetRegistryValue, "visibleWidgets" | "widgetMap"> => {
+	const builtinKinds = new Set(BUILTIN_WIDGET_DEFINITIONS.map((def) => def.kind));
+	const installedVisible = normalizeInstalledWidgetDefinitions(
+		installedDefinitions,
+	).filter((def) => !builtinKinds.has(def.kind));
 
-export const WIDGET_DEFINITIONS: WidgetDefinition[] = VISIBLE_WIDGETS;
+	const visibleWidgets = [
+		...BUILTIN_VISIBLE_WIDGET_DEFINITIONS,
+		...installedVisible,
+	];
+	const widgetMap = new Map<WidgetKind, WidgetDefinition>(
+		[...BUILTIN_WIDGET_DEFINITIONS, ...installedVisible].map((def) => [
+			def.kind,
+			def,
+		]),
+	);
 
-export const WIDGET_MAP = new Map<WidgetKind, WidgetDefinition>(
-	[...VISIBLE_WIDGETS, ...HIDDEN_WIDGETS].map((ext) => [ext.kind, ext]),
-);
+	return { visibleWidgets, widgetMap };
+};
+
+const BASE_REGISTRY = buildWidgetRegistry([]);
+
+export const WIDGET_DEFINITIONS: WidgetDefinition[] = BASE_REGISTRY.visibleWidgets;
+export const WIDGET_MAP: Map<WidgetKind, WidgetDefinition> = BASE_REGISTRY.widgetMap;
+
+const NOOP = () => {};
+
+const WidgetRegistryContext = createContext<WidgetRegistryValue>({
+	visibleWidgets: WIDGET_DEFINITIONS,
+	widgetMap: WIDGET_MAP,
+	installedWidgets: [],
+	replaceInstalledWidgets: NOOP,
+	clearInstalledWidgets: NOOP,
+});
+
+export function WidgetRegistryProvider({ children }: { children: ReactNode }) {
+	const [installedWidgets, setInstalledWidgets] = useState<WidgetDefinition[]>([]);
+
+	const replaceInstalledWidgets = useCallback(
+		(definitions: readonly WidgetDefinition[]) => {
+			setInstalledWidgets(normalizeInstalledWidgetDefinitions(definitions));
+		},
+		[],
+	);
+
+	const clearInstalledWidgets = useCallback(() => {
+		setInstalledWidgets([]);
+	}, []);
+
+	const value = useMemo<WidgetRegistryValue>(() => {
+		const merged = buildWidgetRegistry(installedWidgets);
+		return {
+			visibleWidgets: merged.visibleWidgets,
+			widgetMap: merged.widgetMap,
+			installedWidgets,
+			replaceInstalledWidgets,
+			clearInstalledWidgets,
+		};
+	}, [installedWidgets, replaceInstalledWidgets, clearInstalledWidgets]);
+
+	return (
+		<WidgetRegistryContext.Provider value={value}>
+			{children}
+		</WidgetRegistryContext.Provider>
+	);
+}
+
+export function useWidgetRegistry(): WidgetRegistryValue {
+	return useContext(WidgetRegistryContext);
+}
 
 let widgetCounter = 0;
 
