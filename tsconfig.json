@@ -16,7 +16,7 @@
 		"noEmit": true,
 		"strict": true,
 		"jsx": "react-jsx",
-		"types": ["vite/client"]
+		"types": ["vite/client", "node"]
 	},
 	"include": ["src", "setup-tests.ts", "electron/types.d.ts"]
 }

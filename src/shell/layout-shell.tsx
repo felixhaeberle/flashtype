@@ -850,13 +850,17 @@ function LayoutShellContent() {
 	const handleCreateNewFile = useCallback(async () => {
 		if (!lix) return;
 		const path = await resolveNextUntitledMarkdownPath(lix);
-		const createdFile = await qb(lix)
+		await qb(lix)
 			.insertInto("lix_file")
 			.values({
 				path,
 				data: new TextEncoder().encode(""),
 			})
-			.returning("id")
+			.execute();
+		const createdFile = await qb(lix)
+			.selectFrom("lix_file")
+			.select("id")
+			.where("path", "=", path)
 			.executeTakeFirstOrThrow();
 		const id = createdFile.id;
 		handleOpenView({

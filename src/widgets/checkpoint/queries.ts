@@ -23,18 +23,18 @@ export function selectWorkingDiffFiles(lix: Lix) {
 				const pathExpr = sql<string>`COALESCE(
 					MAX(lix_file.path),
 					MAX(CASE
-						WHEN diff.schema_key = 'lix_file_descriptor' AND json_extract(after.snapshot_content, '$.name') IS NOT NULL THEN
-							'/' || json_extract(after.snapshot_content, '$.name') ||
+						WHEN diff.schema_key = 'lix_file_descriptor' AND lix_json_get_text(after.snapshot_content, 'name') IS NOT NULL THEN
+							'/' || lix_json_get_text(after.snapshot_content, 'name') ||
 						CASE
-							WHEN json_extract(after.snapshot_content, '$.extension') IS NOT NULL AND json_extract(after.snapshot_content, '$.extension') != ''
-								THEN '.' || json_extract(after.snapshot_content, '$.extension')
+							WHEN lix_json_get_text(after.snapshot_content, 'extension') IS NOT NULL AND lix_json_get_text(after.snapshot_content, 'extension') != ''
+								THEN '.' || lix_json_get_text(after.snapshot_content, 'extension')
 							ELSE ''
 						END
-					WHEN diff.schema_key = 'lix_file_descriptor' AND json_extract(before.snapshot_content, '$.name') IS NOT NULL THEN
-						'/' || json_extract(before.snapshot_content, '$.name') ||
+					WHEN diff.schema_key = 'lix_file_descriptor' AND lix_json_get_text(before.snapshot_content, 'name') IS NOT NULL THEN
+						'/' || lix_json_get_text(before.snapshot_content, 'name') ||
 						CASE
-							WHEN json_extract(before.snapshot_content, '$.extension') IS NOT NULL AND json_extract(before.snapshot_content, '$.extension') != ''
-								THEN '.' || json_extract(before.snapshot_content, '$.extension')
+							WHEN lix_json_get_text(before.snapshot_content, 'extension') IS NOT NULL AND lix_json_get_text(before.snapshot_content, 'extension') != ''
+								THEN '.' || lix_json_get_text(before.snapshot_content, 'extension')
 							ELSE ''
 						END
 					ELSE NULL

@@ -167,6 +167,10 @@ export function useKeyValue<K extends KnownKey>(
 	key: K,
 	opts?: UseKeyValueOptions,
 ): readonly [ValueOf<K> | null, (newValue: ValueOf<K>) => Promise<void>];
+export function useKeyValue(
+	key: string,
+	opts?: UseKeyValueOptions,
+): readonly [unknown | null, (newValue: unknown) => Promise<void>];
 export function useKeyValue<K extends string>(
 	key: K,
 	opts?: UseKeyValueOptions,
@@ -296,27 +300,39 @@ async function upsertValue<T>(
 					).version_id
 				: opts.defaultVersionId;
 
+		const updated = await qb(lix)
+			.updateTable("lix_key_value_by_version")
+			.set({ value })
+			.where("key", "=", key)
+			.where("lixcol_version_id", "=", String(versionId))
+			.executeTakeFirst();
+		if (Number(updated.numUpdatedRows ?? 0) > 0) {
+			return;
+		}
 		await qb(lix)
 			.insertInto("lix_key_value_by_version")
 			.values({
 				key,
 				value,
-				lixcol_version_id: versionId,
+				lixcol_version_id: String(versionId),
+				lixcol_global: String(versionId) === "global",
 				lixcol_untracked: true,
 			})
-			.onConflict((oc) =>
-				oc
-					.columns(["key", "lixcol_version_id"])
-					.doUpdateSet({ value, lixcol_untracked: true }),
-			)
 			.execute();
 		return;
 	}
 
+	const updated = await qb(lix)
+		.updateTable("lix_key_value")
+		.set({ value })
+		.where("key", "=", key)
+		.executeTakeFirst();
+	if (Number(updated.numUpdatedRows ?? 0) > 0) {
+		return;
+	}
 	await qb(lix)
 		.insertInto("lix_key_value")
 		.values({ key, value })
-		.onConflict((oc) => oc.column("key").doUpdateSet({ value }))
 		.execute();
 }
 

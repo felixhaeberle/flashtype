@@ -1,13 +1,10 @@
 packages:
   - .
-  - submodule/markdown-wc
-  - submodule/lix
-  - submodule/lix/packages/js-better-sqlite3-backend
+  - submodule/markdown-wc/js
   - submodule/lix/packages/js-sdk
-  - submodule/lix/packages/js-kysely
-  - submodule/lix/packages/react-utils
+  - vendor/lix-legacy/packages/js-kysely
+  - vendor/lix-legacy/packages/react-utils
   - '!submodule/lix/packages/**/dist'
 
 onlyBuiltDependencies:
   - electron
-  - better-sqlite3

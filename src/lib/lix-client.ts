@@ -59,7 +59,9 @@ export async function openDesktopLix(): Promise<Lix> {
 		options?: ExecuteOptions,
 	): Promise<LixRuntimeQueryResult> => {
 		ensureOpen("execute");
-		return await runQueued(() => desktop.lix.execute({ sql, params, options }));
+		return toRuntimeQueryResult(
+			await runQueued(() => desktop.lix.execute({ sql, params, options })),
+		);
 	};
 
 	const beginTransaction = async (
@@ -86,11 +88,13 @@ export async function openDesktopLix(): Promise<Lix> {
 					throw new Error("transaction is closed; execute() is unavailable");
 				}
 				ensureOpen("transaction.execute");
-				return await desktop.lix.transactionExecute({
-					transactionId,
-					sql,
-					params,
-				});
+				return toRuntimeQueryResult(
+					await desktop.lix.transactionExecute({
+						transactionId,
+						sql,
+						params,
+					}),
+				);
 			},
 			commit: async (): Promise<void> => {
 				if (transactionClosed) return;
@@ -171,11 +175,13 @@ export async function openDesktopLix(): Promise<Lix> {
 		options?: ExecuteOptions,
 	): Promise<LixRuntimeQueryResult> => {
 		ensureOpen("executeTransaction");
-		return await runQueued(() =>
-			desktop.lix.executeTransaction({
-				statements,
-				options,
-			}),
+		return toRuntimeQueryResult(
+			await runQueued(() =>
+				desktop.lix.executeTransaction({
+					statements,
+					options,
+				}),
+			),
 		);
 	};
 
@@ -198,7 +204,16 @@ export async function openDesktopLix(): Promise<Lix> {
 					return undefined;
 				}
 				const observeId = await ensureObserveId();
-				return await desktop.lix.observeNext({ observeId });
+				const event = await desktop.lix.observeNext({ observeId });
+				if (!event) {
+					return undefined;
+				}
+				return {
+					sequence: event.sequence,
+					stateCommitSequence: event.stateCommitSequence,
+					rows: event.rows.rows,
+					columns: event.rows.columns,
+				} as ObserveEvent;
 			},
 			close(): void {
 				if (localClosed) {
@@ -258,7 +273,7 @@ export async function openDesktopLix(): Promise<Lix> {
 		await desktop.lix.close();
 	};
 
-	return {
+	const lix = {
 		execute,
 		beginTransaction,
 		transaction,
@@ -271,6 +286,7 @@ export async function openDesktopLix(): Promise<Lix> {
 		exportSnapshot,
 		close,
 	};
+	return lix as unknown as Lix;
 }
 
 function getDesktopApi(): DesktopApi {
@@ -280,4 +296,22 @@ function getDesktopApi(): DesktopApi {
 		);
 	}
 	return window.flashtypeDesktop;
+}
+
+function toRuntimeQueryResult(result: {
+	rows: unknown[][];
+	columns: string[];
+	rowsAffected?: number;
+	notices?: Array<{
+		code: string;
+		message: string;
+		hint?: string;
+	}>;
+}): LixRuntimeQueryResult {
+	return {
+		rows: result.rows,
+		columns: result.columns,
+		rowsAffected: result.rowsAffected ?? 0,
+		notices: result.notices ?? [],
+	};
 }

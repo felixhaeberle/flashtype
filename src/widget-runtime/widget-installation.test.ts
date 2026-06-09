@@ -50,11 +50,12 @@ describe("widget installation", () => {
 		);
 		expect(txExecute).toHaveBeenNthCalledWith(
 			2,
-			"INSERT INTO lix_file_by_version (path, data, lixcol_version_id) VALUES (?, ?, ?)",
+			"INSERT INTO lix_file_by_version (path, data, lixcol_version_id, lixcol_global) VALUES (?, ?, ?, ?)",
 			[
 				"/.lix/app_data/flashtype/widgets/conversation/manifest.json",
 				'{"id":"conversation","name":"Conversation","entry":"./index.js"}',
 				"global",
+				true,
 			],
 		);
 		expect(txExecute).toHaveBeenNthCalledWith(
@@ -64,11 +65,12 @@ describe("widget installation", () => {
 		);
 		expect(txExecute).toHaveBeenNthCalledWith(
 			4,
-			"INSERT INTO lix_file_by_version (path, data, lixcol_version_id) VALUES (?, ?, ?)",
+			"INSERT INTO lix_file_by_version (path, data, lixcol_version_id, lixcol_global) VALUES (?, ?, ?, ?)",
 			[
 				"/.lix/app_data/flashtype/widgets/conversation/index.js",
 				"export function render({ target }) { target.textContent = 'ok'; }",
 				"global",
+				true,
 			],
 		);
 	});

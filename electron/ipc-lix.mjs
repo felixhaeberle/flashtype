@@ -488,20 +488,24 @@ function normalizeArchiveBytes(rawBytes) {
 
 function serializeQueryResult(result) {
 	const rows = Array.isArray(result?.rows)
-		? result.rows.map((row) =>
-				Array.isArray(row) ? row.map((value) => serializeSqlValue(value)) : [],
-			)
+		? result.rows.map((row) => serializeSqlRow(row, result.columns))
 		: [];
 	const columns =
 		Array.isArray(result?.columns) &&
 		result.columns.every((column) => typeof column === "string")
 			? result.columns
 			: [];
-	return { rows, columns };
+	const rowsAffected =
+		typeof result?.rowsAffected === "number" ? result.rowsAffected : 0;
+	const notices = Array.isArray(result?.notices) ? result.notices : [];
+	return { rows, columns, rowsAffected, notices };
 }
 
 function serializeExecuteResult(result, source) {
 	const statements = result?.statements;
+	if (Array.isArray(result?.columns) && Array.isArray(result?.rows)) {
+		return serializeQueryResult(result);
+	}
 	if (!Array.isArray(statements)) {
 		throw new Error(`${source} returned invalid execute result (missing statements[])`);
 	}
@@ -510,6 +514,34 @@ function serializeExecuteResult(result, source) {
 		throw new Error(`${source} returned execute result without statements`);
 	}
 	return serializeQueryResult(primary);
+}
+
+function serializeSqlRow(row, columns) {
+	if (Array.isArray(row)) {
+		return row.map((value) => serializeSqlValue(value));
+	}
+	if (row && typeof row === "object") {
+		if (
+			Array.isArray(columns) &&
+			columns.every((column) => typeof column === "string") &&
+			typeof row.get === "function"
+		) {
+			return columns.map((column) => serializeSqlValue(row.get(column)));
+		}
+		if (
+			Array.isArray(columns) &&
+			columns.every((column) => typeof column === "string") &&
+			typeof row.toObject === "function"
+		) {
+			const object = row.toObject();
+			return columns.map((column) => serializeSqlValue(object[column]));
+		}
+		if (typeof row.toObject === "function") {
+			return Object.values(row.toObject()).map((value) => serializeSqlValue(value));
+		}
+		return Object.values(row).map((value) => serializeSqlValue(value));
+	}
+	return [];
 }
 
 function serializeSqlValue(value) {

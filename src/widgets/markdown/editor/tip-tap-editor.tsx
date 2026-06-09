@@ -139,10 +139,9 @@ export function TipTapEditor({
 				SELECT
 					data
 				FROM lix_file
-				WHERE id = ?1
-					AND (lixcol_writer_key IS NULL OR lixcol_writer_key <> ?2)
+				WHERE id = ?
 			`,
-			params: [activeFileId, writerKey],
+			params: [activeFileId],
 		});
 		let closed = false;
 

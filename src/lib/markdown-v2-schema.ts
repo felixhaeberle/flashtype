@@ -1,5 +1,5 @@
-import markdownBlockSchemaRaw from "../../submodule/lix/packages/plugin-md-v2/schema/markdown_block.json";
-import markdownDocumentSchemaRaw from "../../submodule/lix/packages/plugin-md-v2/schema/markdown_document.json";
+import markdownBlockSchemaRaw from "../../submodule/lix/plugins/markdown/schema/markdown_block.json";
+import markdownDocumentSchemaRaw from "../../submodule/lix/plugins/markdown/schema/markdown_document.json";
 
 type SchemaDefinition = Record<string, unknown>;
 

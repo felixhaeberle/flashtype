@@ -14,6 +14,12 @@ export type SerializedLixValue =
 export type SerializedQueryResult = {
 	rows: SerializedLixValue[][];
 	columns: string[];
+	rowsAffected?: number;
+	notices?: Array<{
+		code: string;
+		message: string;
+		hint?: string;
+	}>;
 };
 
 export type DesktopExecuteOptions = {

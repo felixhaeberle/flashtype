@@ -8,25 +8,6 @@ import { KEY_VALUE_DEFINITIONS } from "./hooks/key-value/schema";
 import { ErrorFallback } from "./main.error";
 import { V2LayoutShell } from "./shell/layout-shell";
 import { openDesktopLix } from "./lib/lix-client";
-import markdownPluginV2ArchiveUrl from "../submodule/lix/packages/plugin-md-v2/plugin-md-v2.lixplugin?url";
-
-let markdownPluginV2ArchiveBytesPromise: Promise<Uint8Array> | undefined;
-
-async function loadMarkdownPluginV2ArchiveBytes(): Promise<Uint8Array> {
-	if (!markdownPluginV2ArchiveBytesPromise) {
-		markdownPluginV2ArchiveBytesPromise = fetch(markdownPluginV2ArchiveUrl)
-			.then((response) => {
-				if (!response.ok) {
-					throw new Error(
-						`Failed to load markdown plugin archive asset: ${response.status}`,
-					);
-				}
-				return response.arrayBuffer();
-			})
-			.then((buffer) => new Uint8Array(buffer));
-	}
-	return await markdownPluginV2ArchiveBytesPromise;
-}
 
 // Error UI moved to ./main.error.tsx
 
@@ -40,12 +21,6 @@ export const AppRoot = () => {
 		(async () => {
 			try {
 				const instance = await openDesktopLix();
-				// Disabled for fallback testing: do not install markdown plugin at app startup.
-				// const markdownPluginV2ArchiveBytes =
-				// 	await loadMarkdownPluginV2ArchiveBytes();
-				// await instance.installPlugin({
-				// 	archiveBytes: markdownPluginV2ArchiveBytes,
-				// });
 				if (cancelled) {
 					await instance.close();
 					return;

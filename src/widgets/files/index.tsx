@@ -153,23 +153,20 @@ export function FilesView({ context }: FilesViewProps) {
 			}
 			creatingRef.current = true;
 			try {
-				const createdFile = await qb(lix)
+				await qb(lix)
 					.insertInto("lix_file")
 					.values({
 						path,
 						data: new TextEncoder().encode(""),
 					})
-					.returning("id")
-					.executeTakeFirst();
-				const id =
-					(createdFile?.id as string | undefined) ??
-					(
-						await qb(lix)
-							.selectFrom("lix_file")
-							.select("id")
-							.where("path", "=", path)
-							.executeTakeFirst()
-					)?.id;
+					.execute();
+				const id = (
+					await qb(lix)
+						.selectFrom("lix_file")
+						.select("id")
+						.where("path", "=", path)
+						.executeTakeFirst()
+				)?.id;
 				if (!id) {
 					throw new Error(`created file id not found for path '${path}'`);
 				}

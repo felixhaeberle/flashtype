@@ -36,7 +36,7 @@ export function selectFilesystemEntries(lix: Lix) {
 			eb.ref("lix_directory.path").as("path"),
 			eb.ref("lix_directory.name").as("display_name"),
 			sql<string>`'directory'`.as("kind"),
-			eb.ref("lix_directory.hidden").as("hidden"),
+			sql<boolean>`false`.as("hidden"),
 		])
 		.unionAll(
 			qb(lix)
@@ -45,13 +45,9 @@ export function selectFilesystemEntries(lix: Lix) {
 					eb.ref("lix_file.id").as("id"),
 					eb.ref("lix_file.directory_id").as("parent_id"),
 					eb.ref("lix_file.path").as("path"),
-					sql<string>`CASE
-						WHEN lix_file.extension IS NULL OR lix_file.extension = ''
-							THEN lix_file.name
-						ELSE lix_file.name || '.' || lix_file.extension
-					END`.as("display_name"),
+					eb.ref("lix_file.name").as("display_name"),
 					sql<string>`'file'`.as("kind"),
-					eb.ref("lix_file.hidden").as("hidden"),
+					sql<boolean>`false`.as("hidden"),
 				]),
 		)
 		.orderBy("path", "asc")

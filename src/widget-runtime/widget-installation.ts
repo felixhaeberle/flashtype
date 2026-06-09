@@ -65,8 +65,8 @@ export async function installWidgetFromFiles(
 				[GLOBAL_VERSION_ID, fullPath],
 			);
 			await tx.execute(
-				"INSERT INTO lix_file_by_version (path, data, lixcol_version_id) VALUES (?, ?, ?)",
-				[fullPath, file.data, GLOBAL_VERSION_ID],
+				"INSERT INTO lix_file_by_version (path, data, lixcol_version_id, lixcol_global) VALUES (?, ?, ?, ?)",
+				[fullPath, file.data, GLOBAL_VERSION_ID, true],
 			);
 		}
 	});
