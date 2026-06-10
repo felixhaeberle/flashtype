@@ -43,13 +43,16 @@ describe("widget installation", () => {
 		expect(txExecute).toHaveBeenNthCalledWith(
 			1,
 			"DELETE FROM lix_file_by_branch WHERE lixcol_branch_id = ? AND path = ?",
-			["global", "/.lix/app_data/flashtype/widgets/conversation/manifest.json"],
+			[
+				"global",
+				"/.lix_system/app_data/flashtype/widgets/conversation/manifest.json",
+			],
 		);
 		expect(txExecute).toHaveBeenNthCalledWith(
 			2,
 			"INSERT INTO lix_file_by_branch (path, data, lixcol_branch_id, lixcol_global) VALUES (?, ?, ?, ?)",
 			[
-				"/.lix/app_data/flashtype/widgets/conversation/manifest.json",
+				"/.lix_system/app_data/flashtype/widgets/conversation/manifest.json",
 				'{"id":"conversation","name":"Conversation","entry":"./index.js"}',
 				"global",
 				true,
@@ -58,13 +61,16 @@ describe("widget installation", () => {
 		expect(txExecute).toHaveBeenNthCalledWith(
 			3,
 			"DELETE FROM lix_file_by_branch WHERE lixcol_branch_id = ? AND path = ?",
-			["global", "/.lix/app_data/flashtype/widgets/conversation/index.js"],
+			[
+				"global",
+				"/.lix_system/app_data/flashtype/widgets/conversation/index.js",
+			],
 		);
 		expect(txExecute).toHaveBeenNthCalledWith(
 			4,
 			"INSERT INTO lix_file_by_branch (path, data, lixcol_branch_id, lixcol_global) VALUES (?, ?, ?, ?)",
 			[
-				"/.lix/app_data/flashtype/widgets/conversation/index.js",
+				"/.lix_system/app_data/flashtype/widgets/conversation/index.js",
 				"export function render({ target }) { target.textContent = 'ok'; }",
 				"global",
 				true,
@@ -81,12 +87,12 @@ describe("widget installation", () => {
 		expect(txExecute).toHaveBeenNthCalledWith(
 			1,
 			"DELETE FROM lix_file_by_branch WHERE lixcol_branch_id = ? AND path LIKE ?",
-			["global", "/.lix/app_data/flashtype/widgets/conversation/%"],
+			["global", "/.lix_system/app_data/flashtype/widgets/conversation/%"],
 		);
 		expect(txExecute).toHaveBeenNthCalledWith(
 			2,
 			"DELETE FROM lix_directory_by_branch WHERE lixcol_branch_id = ? AND path = ?",
-			["global", "/.lix/app_data/flashtype/widgets/conversation/"],
+			["global", "/.lix_system/app_data/flashtype/widgets/conversation/"],
 		);
 	});
 

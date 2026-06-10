@@ -3,7 +3,7 @@ import { qb } from "@/lib/lix-kysely";
 import { MessageSquare, Puzzle, type LucideIcon } from "lucide-react";
 import type { WidgetContext, WidgetDefinition, WidgetInstance } from "./types";
 
-const WIDGET_ROOT = "/.lix/app_data/flashtype/widgets/";
+const WIDGET_ROOT = "/.lix_system/app_data/flashtype/widgets/";
 const MANIFEST_SUFFIX = "/manifest.json";
 
 type WidgetManifest = {

@@ -146,7 +146,7 @@ const DEFAULT_PANEL_FALLBACK_SIZES = {
 };
 const MIN_UNCOLLAPSED_RIGHT_SIZE = 35;
 const MIN_VISIBLE_PANEL_SIZE = 1;
-const INSTALLED_WIDGET_PATH_LIKE = "/.lix/app_data/flashtype/widgets/%";
+const INSTALLED_WIDGET_PATH_LIKE = "/.lix_system/app_data/flashtype/widgets/%";
 const INSTALLED_WIDGET_OBSERVE_SQL =
 	"SELECT path, data FROM lix_file_by_branch WHERE lixcol_branch_id = ? AND path LIKE ?";
 const PANEL_TRANSITION_STYLE: CSSProperties = {

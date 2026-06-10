@@ -3,6 +3,10 @@ import { openLix } from "@/test-utils/node-lix-sdk";
 import { qb } from "@/lib/lix-kysely";
 import { selectFiles, selectFilesystemEntries } from "@/queries";
 
+function isUserPath(path: string): boolean {
+	return !path.startsWith("/.lix_system/");
+}
+
 describe("selectFiles", () => {
 	test("returns minimal rows sorted by path", async () => {
 		const lix = await openLix();
@@ -16,7 +20,7 @@ describe("selectFiles", () => {
 			.execute();
 
 		const rows = await selectFiles(lix).execute();
-		const userRows = rows.filter((row) => !row.path.startsWith("/.lix/"));
+		const userRows = rows.filter((row) => isUserPath(row.path));
 
 		expect(userRows.map((r) => r.path)).toEqual(["/a.md", "/b.md"]);
 		expect(userRows[0]).toHaveProperty("id");
@@ -50,7 +54,7 @@ describe("selectFilesystemEntries", () => {
 			.execute();
 
 		const rows = await selectFilesystemEntries(lix).execute();
-		const userRows = rows.filter((row) => !row.path.startsWith("/.lix/"));
+		const userRows = rows.filter((row) => isUserPath(row.path));
 		expect(userRows.map((row) => row.kind)).toEqual([
 			"file",
 			"directory",

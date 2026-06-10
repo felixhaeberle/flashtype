@@ -1,7 +1,7 @@
 import type { Lix } from "@/lib/lix-types";
 
 const GLOBAL_BRANCH_ID = "global";
-const WIDGETS_ROOT = "/.lix/app_data/flashtype/widgets";
+const WIDGETS_ROOT = "/.lix_system/app_data/flashtype/widgets";
 
 function validateWidgetId(widgetId: string): string {
 	const normalized = widgetId.trim();
