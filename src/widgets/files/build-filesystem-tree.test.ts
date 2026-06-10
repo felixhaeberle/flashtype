@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 
-import { buildFilesystemTree } from "./build-filesystem-tree.js";
+import {
+	buildFilesystemTree,
+	type FilesystemTreeNode,
+} from "./build-filesystem-tree.js";
 import type { FilesystemEntryRow } from "@/queries";
 
 const baseEntries: FilesystemEntryRow[] = [
@@ -63,8 +66,36 @@ describe("buildFilesystemTree", () => {
 		}
 	});
 
-	test("keeps dot-prefixed paths as regular nodes", () => {
+	test("omits paths with dot-prefixed segments", () => {
 		const tree = buildFilesystemTree([
+			{
+				id: "file_visible",
+				parent_id: null,
+				path: "/visible.md",
+				display_name: "visible.md",
+				kind: "file",
+			},
+			{
+				id: "dir_docs",
+				parent_id: null,
+				path: "/docs/",
+				display_name: "docs",
+				kind: "directory",
+			},
+			{
+				id: "file_nested_visible",
+				parent_id: "dir_docs",
+				path: "/docs/visible.md",
+				display_name: "visible.md",
+				kind: "file",
+			},
+			{
+				id: "file_dot",
+				parent_id: null,
+				path: "/.hidden.md",
+				display_name: ".hidden.md",
+				kind: "file",
+			},
 			{
 				id: "dir_dot",
 				parent_id: null,
@@ -73,22 +104,43 @@ describe("buildFilesystemTree", () => {
 				kind: "directory",
 			},
 			{
-				id: "file_dot",
+				id: "file_dot_child",
 				parent_id: "dir_dot",
 				path: "/.lix/config.json",
 				display_name: "config.json",
 				kind: "file",
 			},
+			{
+				id: "dir_nested_dot",
+				parent_id: "dir_docs",
+				path: "/docs/.drafts/",
+				display_name: ".drafts",
+				kind: "directory",
+			},
+			{
+				id: "file_nested_dot_child",
+				parent_id: "dir_nested_dot",
+				path: "/docs/.drafts/outline.md",
+				display_name: "outline.md",
+				kind: "file",
+			},
 		]);
 
-		const dotDir = tree.find(
-			(node) => node.type === "directory" && node.path === "/.lix/",
-		);
-		expect(dotDir).toBeDefined();
-		expect(dotDir).not.toHaveProperty("hidden");
-		if (dotDir?.type === "directory") {
-			expect(dotDir.children[0]?.path).toBe("/.lix/config.json");
-			expect(dotDir.children[0]).not.toHaveProperty("hidden");
-		}
+		expect(collectPaths(tree)).toEqual([
+			"/docs/",
+			"/docs/visible.md",
+			"/visible.md",
+		]);
 	});
 });
+
+function collectPaths(nodes: readonly FilesystemTreeNode[]): string[] {
+	const paths: string[] = [];
+	for (const node of nodes) {
+		paths.push(node.path);
+		if (node.type === "directory") {
+			paths.push(...collectPaths(node.children));
+		}
+	}
+	return paths;
+}

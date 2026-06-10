@@ -31,6 +31,10 @@ function sortChildren(nodes: FilesystemTreeNode[]): void {
 	}
 }
 
+function hasDotPrefixedSegment(path: string): boolean {
+	return path.split("/").some((segment) => segment.startsWith("."));
+}
+
 /**
  * Builds a nested tree from flat filesystem entries.
  *
@@ -45,6 +49,7 @@ export function buildFilesystemTree(
 
 	for (const entry of entries) {
 		if (entry.kind !== "directory") continue;
+		if (hasDotPrefixedSegment(entry.path)) continue;
 		directories.set(entry.id, {
 			type: "directory",
 			id: entry.id,
@@ -56,6 +61,7 @@ export function buildFilesystemTree(
 
 	for (const entry of entries) {
 		if (entry.kind !== "directory") continue;
+		if (hasDotPrefixedSegment(entry.path)) continue;
 		const node = directories.get(entry.id);
 		if (!node) continue;
 		if (entry.parent_id && directories.has(entry.parent_id)) {
@@ -68,6 +74,7 @@ export function buildFilesystemTree(
 
 	for (const entry of entries) {
 		if (entry.kind !== "file") continue;
+		if (hasDotPrefixedSegment(entry.path)) continue;
 		const fileNode: FilesystemTreeFile = {
 			type: "file",
 			id: entry.id,

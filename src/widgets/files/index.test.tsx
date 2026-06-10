@@ -212,8 +212,12 @@ describe("FilesView", () => {
 		await lix.close();
 	});
 
-	test("shows dot-prefixed files like regular files", async () => {
+	test("hides dot-prefixed files and folder descendants", async () => {
 		const lix = await openLix();
+		await qb(lix)
+			.insertInto("lix_directory")
+			.values({ path: "/.hidden-folder/" } as any)
+			.execute();
 		await qb(lix)
 			.insertInto("lix_file")
 			.values([
@@ -225,6 +229,11 @@ describe("FilesView", () => {
 				{
 					id: "dot_file",
 					path: "/.hidden.md",
+					data: new Uint8Array(),
+				},
+				{
+					id: "dot_folder_child",
+					path: "/.hidden-folder/inside.md",
 					data: new Uint8Array(),
 				},
 			])
@@ -243,7 +252,9 @@ describe("FilesView", () => {
 
 		await waitFor(() => {
 			expect(utils!.getByText("visible.md")).toBeInTheDocument();
-			expect(utils!.getByText(".hidden.md")).toBeInTheDocument();
+			expect(utils!.queryByText(".hidden.md")).toBeNull();
+			expect(utils!.queryByText(".hidden-folder")).toBeNull();
+			expect(utils!.queryByText("inside.md")).toBeNull();
 		});
 
 		utils!.unmount();
