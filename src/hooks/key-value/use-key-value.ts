@@ -265,15 +265,14 @@ function selectValue(
 	key: string,
 	opts: { defaultBranchId: string; untracked: boolean },
 ) {
-	if (opts.untracked) {
-		const branchId = resolveUntrackedBranchId(opts.defaultBranchId);
+	if (opts.defaultBranchId !== "active") {
 		return qb(lix)
 			.selectFrom("lix_key_value_by_branch")
-			.where("lixcol_branch_id", "=", branchId)
+			.where("lixcol_branch_id", "=", opts.defaultBranchId)
 			.where("key", "=", key)
 			.select(["value"]);
 	}
-	// tracked (change-controlled) — supported on active branch
+
 	return qb(lix)
 		.selectFrom("lix_key_value")
 		.where("key", "=", key)
@@ -286,52 +285,33 @@ async function upsertValue<T>(
 	value: T,
 	opts: { defaultBranchId: string; untracked: boolean },
 ) {
-	if (opts.untracked) {
-		const branchId =
-			opts.defaultBranchId === "active"
-				? await lix.activeBranchId()
-				: opts.defaultBranchId;
-
-		const updated = await qb(lix)
-			.updateTable("lix_key_value_by_branch")
-			.set({ value })
-			.where("key", "=", key)
-			.where("lixcol_branch_id", "=", String(branchId))
-			.executeTakeFirst();
-		if (Number(updated.numUpdatedRows ?? 0) > 0) {
-			return;
-		}
+	if (opts.defaultBranchId === "active") {
 		await qb(lix)
-			.insertInto("lix_key_value_by_branch")
+			.insertInto("lix_key_value")
 			.values({
 				key,
 				value,
-				lixcol_branch_id: String(branchId),
-				lixcol_global: String(branchId) === "global",
-				lixcol_untracked: true,
+				lixcol_untracked: opts.untracked,
 			})
+			.onConflict((oc) => oc.column("key").doUpdateSet({ value }))
 			.execute();
 		return;
 	}
 
-	const updated = await qb(lix)
-		.updateTable("lix_key_value")
-		.set({ value })
-		.where("key", "=", key)
-		.executeTakeFirst();
-	if (Number(updated.numUpdatedRows ?? 0) > 0) {
-		return;
-	}
-	await qb(lix).insertInto("lix_key_value").values({ key, value }).execute();
-}
-
-function resolveUntrackedBranchId(defaultBranchId: string): string {
-	if (defaultBranchId === "active") {
-		throw new Error(
-			"active untracked key-value reads are not supported by the main Lix branch surface",
-		);
-	}
-	return defaultBranchId;
+	const branchId = opts.defaultBranchId;
+	await qb(lix)
+		.insertInto("lix_key_value_by_branch")
+		.values({
+			key,
+			value,
+			lixcol_branch_id: branchId,
+			lixcol_global: branchId === "global",
+			lixcol_untracked: opts.untracked,
+		})
+		.onConflict((oc) =>
+			oc.columns(["key", "lixcol_branch_id"]).doUpdateSet({ value }),
+		)
+		.execute();
 }
 
 function valuesEqual(a: unknown, b: unknown): boolean {
