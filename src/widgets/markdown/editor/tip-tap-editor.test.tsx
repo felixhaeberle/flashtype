@@ -49,7 +49,7 @@ async function countWorkingDiffRows(args: {
 	fileId: string;
 }): Promise<number> {
 	const result = await args.lix.execute(
-		"SELECT COUNT(*) AS diff_count FROM lix_working_changes WHERE file_id = ?1",
+		"SELECT COUNT(*) AS diff_count FROM lix_working_changes WHERE file_id = ?",
 		[args.fileId],
 	);
 	const countIndex = result.columns.indexOf("diff_count");
@@ -99,7 +99,7 @@ test("renders initial document content", async () => {
 			{
 				key: "lix_deterministic_mode",
 				value: "enabled",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 			},
 		],
 	});
@@ -119,11 +119,11 @@ test("renders initial document content", async () => {
 		.execute();
 
 	await qb(lix)
-		.insertInto("lix_key_value_by_version")
+		.insertInto("lix_key_value_by_branch")
 		.values({
 			key: "flashtype_active_file_id",
 			value: fileId,
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
 			lixcol_untracked: true,
 		})
 		.execute();
@@ -151,12 +151,12 @@ test("persists state changes on edit (paragraph append)", async () => {
 			{
 				key: "lix_deterministic_mode",
 				value: "enabled",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 			},
 			{
 				key: "flashtype_active_file_id",
 				value: fileId,
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 				lixcol_untracked: true,
 			},
 		],
@@ -230,7 +230,7 @@ test("renders content under React.StrictMode", async () => {
 			{
 				key: "lix_deterministic_mode",
 				value: "enabled",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 			},
 		],
 	});
@@ -250,11 +250,11 @@ test("renders content under React.StrictMode", async () => {
 		.execute();
 
 	await qb(lix)
-		.insertInto("lix_key_value_by_version")
+		.insertInto("lix_key_value_by_branch")
 		.values({
 			key: "flashtype_active_file_id",
 			value: fileId,
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
 			lixcol_untracked: true,
 		})
 		.execute();
@@ -282,12 +282,12 @@ test("shows placeholder only while focused on an empty document", async () => {
 			{
 				key: "lix_deterministic_mode",
 				value: "enabled",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 			},
 			{
 				key: "flashtype_active_file_id",
 				value: fileId,
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 				lixcol_untracked: true,
 			},
 		],
@@ -354,12 +354,12 @@ test("clicking the surface focuses the editor even when content exists", async (
 			{
 				key: "lix_deterministic_mode",
 				value: "enabled",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 			},
 			{
 				key: "flashtype_active_file_id",
 				value: fileId,
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 				lixcol_untracked: true,
 			},
 		],
@@ -404,13 +404,13 @@ test("clicking the surface focuses the editor even when content exists", async (
 	});
 });
 
-test("updates editor when switching to a version with different external state", async () => {
+test("updates editor when switching to a branch with different external state", async () => {
 	const lix = await openLix({
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
 				value: "enabled",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 			},
 		],
 	});
@@ -420,7 +420,7 @@ test("updates editor when switching to a version with different external state",
 	await insertMarkdownSchemas({ lix });
 
 	// Create a file and set it active
-	const fileId = "file_switch_version";
+	const fileId = "file_switch_branch";
 	await qb(lix)
 		.insertInto("lix_file")
 		.values({
@@ -431,16 +431,25 @@ test("updates editor when switching to a version with different external state",
 		.execute();
 
 	await qb(lix)
-		.insertInto("lix_key_value_by_version")
+		.insertInto("lix_key_value_by_branch")
 		.values({
 			key: "flashtype_active_file_id",
 			value: fileId,
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
 			lixcol_untracked: true,
 		})
 		.execute();
 
-	// Initial render in base version
+	const branchB = await lix.createBranch({ name: "Draft" });
+
+	await qb(lix)
+		.updateTable("lix_file_by_branch")
+		.set({ data: new TextEncoder().encode("Hello B") })
+		.where("id", "=", fileId)
+		.where("lixcol_branch_id", "=", branchB.id)
+		.execute();
+
+	// Initial render in base branch
 	await act(async () => {
 		render(
 			<Suspense>
@@ -454,42 +463,9 @@ test("updates editor when switching to a version with different external state",
 	const editorA = await screen.findByTestId("tiptap-editor");
 	expect(editorA).toHaveTextContent("Hello A");
 
-	// Create a new version B from current (still showing Hello A in main)
-		const vB = await lix.createBranch({ name: "Draft" });
-
-	// Pre-seed version B's STATE to differ from main (explicit, deterministic)
-	await insertMarkdownSchemas({ lix });
-	await qb(lix)
-		.insertInto("lix_state_by_version")
-		.values({
-			entity_id: MARKDOWN_V2_ROOT_ENTITY_ID,
-			schema_key: MARKDOWN_V2_DOCUMENT_SCHEMA_KEY,
-			file_id: fileId,
-			version_id: vB.id,
-			plugin_key: MARKDOWN_PLUGIN_KEY,
-			snapshot_content: {
-				id: MARKDOWN_V2_ROOT_ENTITY_ID,
-				order: ["p1"],
-			} as any,
-			schema_version: MARKDOWN_V2_SCHEMA_VERSION,
-		} as any)
-		.execute();
-	await qb(lix)
-		.insertInto("lix_state_by_version")
-		.values({
-			entity_id: "p1",
-			schema_key: MARKDOWN_V2_BLOCK_SCHEMA_KEY,
-			file_id: fileId,
-			version_id: vB.id,
-			plugin_key: MARKDOWN_PLUGIN_KEY,
-			snapshot_content: paragraphSnapshot("p1", "Hello B") as any,
-			schema_version: MARKDOWN_V2_SCHEMA_VERSION,
-		} as any)
-		.execute();
-
-	// Switch to version B — the editor should reflect version B's content "Hello B"
+	// Switch to branch B; the editor should reflect branch B's content "Hello B"
 	await act(async () => {
-			await lix.switchBranch({ branchId: vB.id });
+		await lix.switchBranch({ branchId: branchB.id });
 	});
 
 	await waitFor(() => {
@@ -497,13 +473,13 @@ test("updates editor when switching to a version with different external state",
 	});
 });
 
-test("updates editor when the file's state is changed externally in the same version", async () => {
+test("updates editor when the file's state is changed externally in the same branch", async () => {
 	const lix = await openLix({
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
 				value: "enabled",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 			},
 		],
 	});
@@ -524,11 +500,11 @@ test("updates editor when the file's state is changed externally in the same ver
 
 	// Set active file id
 	await qb(lix)
-		.insertInto("lix_key_value_by_version")
+		.insertInto("lix_key_value_by_branch")
 		.values({
 			key: "flashtype_active_file_id",
 			value: fileId,
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
 			lixcol_untracked: true,
 		})
 		.execute();
@@ -560,7 +536,10 @@ test("updates editor when the file's state is changed externally in the same ver
 		.where("entity_id", "=", paragraph.entity_id)
 		.where("file_id", "=", paragraph.file_id)
 		.set({
-			snapshot_content: paragraphSnapshot(String(paragraph.entity_id), "Hello B"),
+			snapshot_content: paragraphSnapshot(
+				String(paragraph.entity_id),
+				"Hello B",
+			),
 		})
 		.execute();
 
@@ -577,7 +556,7 @@ test("updates editor when file.data is updated externally (simulate updateFile w
 			{
 				key: "lix_deterministic_mode",
 				value: "enabled",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 			},
 		],
 	});
@@ -597,11 +576,11 @@ test("updates editor when file.data is updated externally (simulate updateFile w
 		.execute();
 
 	await qb(lix)
-		.insertInto("lix_key_value_by_version")
+		.insertInto("lix_key_value_by_branch")
 		.values({
 			key: "flashtype_active_file_id",
 			value: fileId,
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
 			lixcol_untracked: true,
 		})
 		.execute();
@@ -633,13 +612,13 @@ test("updates editor when file.data is updated externally (simulate updateFile w
 	});
 });
 
-test("preserves main content when switching to a new version and back", async () => {
+test("preserves main content when switching to a new branch and back", async () => {
 	const lix = await openLix({
 		keyValues: [
 			{
 				key: "lix_deterministic_mode",
 				value: "enabled",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 			},
 		],
 	});
@@ -656,21 +635,17 @@ test("preserves main content when switching to a new version and back", async ()
 
 	// Activate file globally
 	await qb(lix)
-		.insertInto("lix_key_value_by_version")
+		.insertInto("lix_key_value_by_branch")
 		.values({
 			key: "flashtype_active_file_id",
 			value: fileId,
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
 			lixcol_untracked: true,
 		})
 		.execute();
 
-	// Remember currently active version id (main)
-	const main = await qb(lix)
-		.selectFrom("lix_active_version")
-		.select("version_id")
-		.executeTakeFirstOrThrow();
-	const mainId = (main as any).version_id as string;
+	// Remember currently active branch id (main)
+	const mainId = await lix.activeBranchId();
 
 	// Seed state in main to "Hello world"
 	await insertMarkdownSchemas({ lix });
@@ -713,7 +688,7 @@ test("preserves main content when switching to a new version and back", async ()
 	const editorA = await screen.findByTestId("tiptap-editor");
 	expect(editorA).toHaveTextContent("Hello world");
 
-	// Create a new version from main and switch to it
+	// Create a new branch from main and switch to it
 	const vB = await lix.createBranch({ name: "Draft" });
 	await act(async () => {
 		await lix.switchBranch({ branchId: vB.id });
@@ -740,7 +715,7 @@ Use this file to give instructions of how you want the lix agent to work for you
 For example:
 
 - What's the writing style you prefer?
-- Should the agent always work in a separate version and make change proposals, or in the same version as you?
+- Should the agent always work in a separate branch and make change proposals, or in the same branch as you?
 - What are things the agent should always do, never do, or remember?
 
 > @Lix Agent **Check if the user has files other than the /AGENTS.md file then**
@@ -758,7 +733,7 @@ For example:
 			{
 				key: "lix_deterministic_mode",
 				value: "enabled",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 			},
 		],
 	});
@@ -777,11 +752,11 @@ For example:
 		.execute();
 
 	await qb(lix)
-		.insertInto("lix_key_value_by_version")
+		.insertInto("lix_key_value_by_branch")
 		.values({
 			key: "flashtype_active_file_id",
 			value: fileId,
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
 			lixcol_untracked: true,
 		})
 		.execute();

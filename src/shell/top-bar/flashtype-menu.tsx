@@ -40,7 +40,7 @@ export function FlashtypeMenu() {
 	const [deterministicMode, setDeterministicMode] = useKeyValue(
 		"lix_deterministic_mode" as any,
 		{
-			defaultVersionId: "global",
+			defaultBranchId: "global",
 			untracked: true,
 		},
 	) as [
@@ -182,9 +182,7 @@ export function FlashtypeMenu() {
 								<Eye className="h-3.5 w-3.5" />
 							)}
 							<span>
-								{showHiddenFiles
-									? "Hide hidden files"
-									: "Show hidden files"}
+								{showHiddenFiles ? "Hide hidden files" : "Show hidden files"}
 							</span>
 						</DropdownMenuItem>
 						<DropdownMenuItem

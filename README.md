@@ -10,13 +10,13 @@ Flashtype is a WYSIWYG markdown editor built on the Lix SDK. It serves as both a
 
 Flashtype demonstrates key Lix capabilities:
 
-| Lix Feature             | How Flashtype Uses It                                                         |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| **History**             | Every edit is tracked. See exactly what changed, when, and by whom.           |
-| **Versions (Branches)** | AI generates content in isolated versions, letting you review before merging. |
-| **Diffs**               | Claude Code-style accept/reject UI shows granular changes inline.             |
-| **Change Proposals**    | AI proposes edits, humans stay in control of what ships.                      |
-| **Single SQLite File**  | Your documents persist in browser storage as a portable `.lix` file.          |
+| Lix Feature            | How Flashtype Uses It                                                         |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| **History**            | Every edit is tracked. See exactly what changed, when, and by whom.           |
+| **Branches**           | AI generates content in isolated branches, letting you review before merging. |
+| **Diffs**              | Claude Code-style accept/reject UI shows granular changes inline.             |
+| **Change Proposals**   | AI proposes edits, humans stay in control of what ships.                      |
+| **Single SQLite File** | Your documents persist in browser storage as a portable `.lix` file.          |
 
 ## 🚀 Try It
 

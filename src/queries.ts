@@ -57,7 +57,7 @@ export function selectFilesystemEntries(lix: Lix) {
 /**
  * Aggregated working diff counts for the active file.
  *
- * The query scopes the change-set elements to the version's current working commit
+ * The query scopes the change-set elements to the branch's current working commit
  * so that live observers reset when checkpoints promote a new commit. Markdown
  * root-order changes are excluded to avoid counting pure reorders.
  *
@@ -89,7 +89,11 @@ export function selectWorkingDiffCount(lix: Lix) {
 export function selectCheckpoints({ lix }: { lix: Lix }) {
 	return qb(lix)
 		.selectFrom("lix_commit")
-		.innerJoin("lix_change_set", "lix_change_set.id", "lix_commit.change_set_id")
+		.innerJoin(
+			"lix_change_set",
+			"lix_change_set.id",
+			"lix_commit.change_set_id",
+		)
 		.innerJoin("lix_entity_label as checkpoint_label", (join) =>
 			join
 				.onRef("checkpoint_label.entity_id", "=", "lix_commit.id")
@@ -104,7 +108,11 @@ export function selectCheckpoints({ lix }: { lix: Lix }) {
 			"lix_change_set.id",
 		)
 		.leftJoin("lix_change", "lix_change.id", "lix_change_set_element.change_id")
-		.groupBy(["lix_change_set.id", "lix_commit.id", "checkpoint_label.lixcol_created_at"])
+		.groupBy([
+			"lix_change_set.id",
+			"lix_commit.id",
+			"checkpoint_label.lixcol_created_at",
+		])
 		.select((eb) => [
 			eb.ref("lix_change_set.id").as("id"),
 			eb.ref("lix_commit.id").as("commit_id"),

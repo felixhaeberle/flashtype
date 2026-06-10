@@ -97,22 +97,62 @@ export async function openLix(options: any = {}) {
 			? addon.Lix.openSqlite(options.backend.path)
 			: addon.Lix.openMemory();
 	const lix = createTestLixAdapter(createNativeLixAdapter(raw));
-	if (options?.keyValues && typeof options.keyValues === "object") {
+	if (Array.isArray(options?.keyValues)) {
+		for (const entry of options.keyValues) {
+			if (!entry || typeof entry.key !== "string") {
+				continue;
+			}
+			const value = normalizeOpenLixKeyValue(entry.key, entry.value);
+			if (typeof entry.lixcol_branch_id === "string") {
+				await lix.execute(
+					"INSERT INTO lix_key_value_by_branch (key, value, lixcol_branch_id, lixcol_global, lixcol_untracked) VALUES ($1, $2, $3, $4, $5)",
+					[
+						entry.key,
+						value,
+						entry.lixcol_branch_id,
+						entry.lixcol_global ?? entry.lixcol_branch_id === "global",
+						entry.lixcol_untracked ?? true,
+					],
+				);
+				continue;
+			}
+			await lix.execute(
+				"INSERT INTO lix_key_value (key, value, lixcol_global, lixcol_untracked) VALUES ($1, $2, true, true)",
+				[entry.key, value],
+			);
+		}
+	} else if (options?.keyValues && typeof options.keyValues === "object") {
 		for (const [key, value] of Object.entries(options.keyValues)) {
 			await lix.execute(
 				"INSERT INTO lix_key_value (key, value, lixcol_global, lixcol_untracked) VALUES ($1, $2, true, true)",
-				[key, value],
+				[key, normalizeOpenLixKeyValue(key, value)],
 			);
 		}
 	}
 	return lix;
 }
 
+function normalizeOpenLixKeyValue(key: string, value: unknown): unknown {
+	if (key !== "lix_deterministic_mode") {
+		return value;
+	}
+	if (value === "enabled") {
+		return { enabled: true };
+	}
+	if (value === "disabled") {
+		return { enabled: false };
+	}
+	return value;
+}
+
 function createNativeLixAdapter(raw: RawNativeLix) {
 	return {
 		async execute(sql: string, params: ReadonlyArray<unknown> = []) {
 			return wrapNativeResult(
-				raw.execute(sql, params.map((param, index) => toNativeParam(param, index))),
+				raw.execute(
+					sql,
+					params.map((param, index) => toNativeParam(param, index)),
+				),
 			);
 		},
 		async beginTransaction() {
@@ -195,7 +235,9 @@ function toNativeParam(value: unknown, index: number): RawNativeValue {
 	if (typeof value === "object" && value) {
 		return { kind: "json", value };
 	}
-	throw new TypeError(`Unsupported SQL parameter ${index + 1}: ${typeof value}`);
+	throw new TypeError(
+		`Unsupported SQL parameter ${index + 1}: ${typeof value}`,
+	);
 }
 
 function fromNativeValue(value: RawNativeValue): unknown {
@@ -233,7 +275,9 @@ function createTestLixAdapter(nativeLix: NativeLix) {
 		async transaction<T>(
 			first:
 				| ExecuteOptions
-				| ((tx: Awaited<ReturnType<NativeLix["beginTransaction"]>>) => Promise<T>),
+				| ((
+						tx: Awaited<ReturnType<NativeLix["beginTransaction"]>>,
+				  ) => Promise<T>),
 			second?: (
 				tx: Awaited<ReturnType<NativeLix["beginTransaction"]>>,
 			) => Promise<T>,
@@ -283,20 +327,6 @@ function createTestLixAdapter(nativeLix: NativeLix) {
 		async switchBranch(options: Parameters<NativeLix["switchBranch"]>[0]) {
 			return await nativeLix.switchBranch(options);
 		},
-		async createVersion(options: { id?: string; name?: string } = {}) {
-			const created = await nativeLix.createBranch({
-				id: options.id,
-				name: options.name ?? "Draft",
-			});
-			return {
-				id: created.id,
-				name: created.name,
-				inheritsFromVersionId: null,
-			};
-		},
-		async switchVersion(versionId: string) {
-			await nativeLix.switchBranch({ branchId: versionId });
-		},
 		async createCheckpoint() {
 			const result = await nativeLix.execute(
 				"SELECT lix_active_branch_commit_id() AS id",
@@ -319,7 +349,7 @@ function createTestLixAdapter(nativeLix: NativeLix) {
 async function seedMarkdownSchemas(nativeLix: NativeLix) {
 	for (const schema of [markdownDocumentSchema, markdownBlockSchema]) {
 		await nativeLix.execute(
-			"INSERT INTO lix_registered_schema (value, lixcol_global, lixcol_untracked) VALUES (lix_json($1), true, true)",
+			"INSERT INTO lix_registered_schema (value, lixcol_global, lixcol_untracked) VALUES (lix_json($1), true, false)",
 			[JSON.stringify(schema)],
 		);
 	}
@@ -329,35 +359,8 @@ function rewriteLegacySqlForTests(sql: string) {
 	let out = String(sql);
 	out = out.replace(/\bchange\s+as\s+/g, "lix_change as ");
 	out = out.replace(
-		/\b(from|join)\s+lix_active_version\b/gi,
-		(_, keyword) => `${keyword} ${activeVersionSubquery()}`,
-	);
-	out = out.replace(/\blix_version\./g, "lix_branch.");
-	out = out.replace(/\blix_version\b/g, "lix_branch");
-	out = out.replace(
-		/\blix_branch\.id\s*=\s*lix_active_version\.version_id\b/g,
-		`lix_json('"' || lix_branch.id || '"') = lix_active_version.version_id`,
-	);
-	out = out.replace(
-		/\blix_active_version\.version_id\s*=\s*lix_branch\.id\b/g,
-		`lix_active_version.version_id = lix_json('"' || lix_branch.id || '"')`,
-	);
-	out = out.replace(
-		/\blix_branch\.inherits_from_version_id\b/g,
-		"NULL AS inherits_from_version_id",
-	);
-	out = out.replace(
-		/(^|[\s,])inherits_from_version_id(?=([\s,]|$))/g,
-		"$1NULL AS inherits_from_version_id",
-	);
-	out = out.replace(/\blixcol_version_id\b/g, "lixcol_branch_id");
-	out = out.replace(/\blix_state_by_version\b/g, "lix_state_by_branch");
-	out = out.replace(/\blix_file_by_version\b/g, "lix_file_by_branch");
-	out = out.replace(/\blix_directory_by_version\b/g, "lix_directory_by_branch");
-	out = out.replace(/\blix_key_value_by_version\b/g, "lix_key_value_by_branch");
-	out = out.replace(
-		/\blix_registered_schema_by_version\b/g,
-		"lix_registered_schema_by_branch",
+		/\b(from|join)\s+lix_active_branch\b/gi,
+		(_, keyword) => `${keyword} ${activeBranchSubquery()}`,
 	);
 	out = out.replace(
 		/\blix_working_changes\s+as\s+([A-Za-z_][A-Za-z0-9_]*)/g,
@@ -395,8 +398,8 @@ function rewriteCompatStatement(
 	return { sql: out, params: nextParams };
 }
 
-function activeVersionSubquery() {
-	return "(SELECT value AS version_id FROM lix_key_value WHERE key = 'lix_workspace_branch_id' LIMIT 1) AS lix_active_version";
+function activeBranchSubquery() {
+	return "(SELECT value AS branch_id FROM lix_key_value WHERE key = 'lix_workspace_branch_id' LIMIT 1) AS lix_active_branch";
 }
 
 function emptyWorkingChangesSubquery() {

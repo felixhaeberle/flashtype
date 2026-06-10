@@ -53,11 +53,11 @@ describe("MarkdownView", () => {
 			.execute();
 
 		await qb(lix)
-			.insertInto("lix_key_value_by_version")
+			.insertInto("lix_key_value_by_branch")
 			.values({
 				key: "flashtype_active_file_id",
 				value: "file_1",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 				lixcol_untracked: true,
 			})
 			.execute();
@@ -79,7 +79,7 @@ describe("MarkdownView", () => {
 
 		await waitFor(async () => {
 			const rows = await qb(lix)
-				.selectFrom("lix_key_value_by_version")
+				.selectFrom("lix_key_value_by_branch")
 				.where("key", "=", "flashtype_active_file_id")
 				.select(["value"])
 				.execute();
@@ -116,11 +116,11 @@ describe("MarkdownView", () => {
 
 		// Persist a stale active file id pointing to alpha
 		await qb(lix)
-			.insertInto("lix_key_value_by_version")
+			.insertInto("lix_key_value_by_branch")
 			.values({
 				key: "flashtype_active_file_id",
 				value: "file_alpha",
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 				lixcol_untracked: true,
 			})
 			.execute();
@@ -147,7 +147,7 @@ describe("MarkdownView", () => {
 
 		await waitFor(async () => {
 			const record = await qb(lix)
-				.selectFrom("lix_key_value_by_version")
+				.selectFrom("lix_key_value_by_branch")
 				.select(["value"])
 				.where("key", "=", "flashtype_active_file_id")
 				.executeTakeFirst();

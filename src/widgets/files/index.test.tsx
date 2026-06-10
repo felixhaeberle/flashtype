@@ -288,11 +288,11 @@ describe("FilesView", () => {
 			])
 			.execute();
 		await qb(lix)
-			.insertInto("lix_key_value_by_version")
+			.insertInto("lix_key_value_by_branch")
 			.values({
 				key: "flashtype_show_hidden_files",
 				value: true,
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 				lixcol_untracked: true,
 			})
 			.execute();

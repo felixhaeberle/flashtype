@@ -1,9 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import type { Lix, SqlTransaction } from "@lix-js/sdk";
-import {
-	installWidgetFromFiles,
-	uninstallWidget,
-} from "./widget-installation";
+import { installWidgetFromFiles, uninstallWidget } from "./widget-installation";
 
 function createMockLix() {
 	const txExecute = vi.fn(async () => ({ rows: [], columns: [] }));
@@ -13,8 +10,8 @@ function createMockLix() {
 		rollback: vi.fn(async () => {}),
 	} as unknown as SqlTransaction;
 
-	const transaction = vi.fn(async (cb: (tx: SqlTransaction) => Promise<unknown>) =>
-		cb(tx),
+	const transaction = vi.fn(
+		async (cb: (tx: SqlTransaction) => Promise<unknown>) => cb(tx),
 	);
 
 	const lix = {
@@ -25,7 +22,7 @@ function createMockLix() {
 }
 
 describe("widget installation", () => {
-	test("installs widget files into global version", async () => {
+	test("installs widget files into global branch", async () => {
 		const { lix, txExecute } = createMockLix();
 
 		await installWidgetFromFiles(lix, {
@@ -45,12 +42,12 @@ describe("widget installation", () => {
 		expect(txExecute).toHaveBeenCalledTimes(4);
 		expect(txExecute).toHaveBeenNthCalledWith(
 			1,
-			"DELETE FROM lix_file_by_version WHERE lixcol_version_id = ? AND path = ?",
+			"DELETE FROM lix_file_by_branch WHERE lixcol_branch_id = ? AND path = ?",
 			["global", "/.lix/app_data/flashtype/widgets/conversation/manifest.json"],
 		);
 		expect(txExecute).toHaveBeenNthCalledWith(
 			2,
-			"INSERT INTO lix_file_by_version (path, data, lixcol_version_id, lixcol_global) VALUES (?, ?, ?, ?)",
+			"INSERT INTO lix_file_by_branch (path, data, lixcol_branch_id, lixcol_global) VALUES (?, ?, ?, ?)",
 			[
 				"/.lix/app_data/flashtype/widgets/conversation/manifest.json",
 				'{"id":"conversation","name":"Conversation","entry":"./index.js"}',
@@ -60,12 +57,12 @@ describe("widget installation", () => {
 		);
 		expect(txExecute).toHaveBeenNthCalledWith(
 			3,
-			"DELETE FROM lix_file_by_version WHERE lixcol_version_id = ? AND path = ?",
+			"DELETE FROM lix_file_by_branch WHERE lixcol_branch_id = ? AND path = ?",
 			["global", "/.lix/app_data/flashtype/widgets/conversation/index.js"],
 		);
 		expect(txExecute).toHaveBeenNthCalledWith(
 			4,
-			"INSERT INTO lix_file_by_version (path, data, lixcol_version_id, lixcol_global) VALUES (?, ?, ?, ?)",
+			"INSERT INTO lix_file_by_branch (path, data, lixcol_branch_id, lixcol_global) VALUES (?, ?, ?, ?)",
 			[
 				"/.lix/app_data/flashtype/widgets/conversation/index.js",
 				"export function render({ target }) { target.textContent = 'ok'; }",
@@ -75,7 +72,7 @@ describe("widget installation", () => {
 		);
 	});
 
-	test("uninstalls widget files and root directory from global version", async () => {
+	test("uninstalls widget files and root directory from global branch", async () => {
 		const { lix, txExecute } = createMockLix();
 
 		await uninstallWidget(lix, "conversation");
@@ -83,12 +80,12 @@ describe("widget installation", () => {
 		expect(txExecute).toHaveBeenCalledTimes(2);
 		expect(txExecute).toHaveBeenNthCalledWith(
 			1,
-			"DELETE FROM lix_file_by_version WHERE lixcol_version_id = ? AND path LIKE ?",
+			"DELETE FROM lix_file_by_branch WHERE lixcol_branch_id = ? AND path LIKE ?",
 			["global", "/.lix/app_data/flashtype/widgets/conversation/%"],
 		);
 		expect(txExecute).toHaveBeenNthCalledWith(
 			2,
-			"DELETE FROM lix_directory_by_version WHERE lixcol_version_id = ? AND path = ?",
+			"DELETE FROM lix_directory_by_branch WHERE lixcol_branch_id = ? AND path = ?",
 			["global", "/.lix/app_data/flashtype/widgets/conversation/"],
 		);
 	});

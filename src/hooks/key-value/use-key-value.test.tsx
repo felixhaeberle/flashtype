@@ -19,7 +19,7 @@ function nextTestKey(base: string): string {
 
 function withKeyDef(
 	key: string,
-	def: { defaultVersionId: "active" | "global" | string; untracked: boolean },
+	def: { defaultBranchId: "active" | "global" | string; untracked: boolean },
 ) {
 	return {
 		...KEY_VALUE_DEFINITIONS,
@@ -30,7 +30,7 @@ function withKeyDef(
 test("reads a global, untracked key (test fixture)", async () => {
 	const testKey = nextTestKey("flashtype_test_untracked");
 	const defs = withKeyDef(testKey, {
-		defaultVersionId: "global",
+		defaultBranchId: "global",
 		untracked: true,
 	});
 	const lix = await openLix({});
@@ -44,11 +44,11 @@ test("reads a global, untracked key (test fixture)", async () => {
 
 	// Pre-insert expected value
 	await qb(lix)
-		.insertInto("lix_key_value_by_version")
+		.insertInto("lix_key_value_by_branch")
 		.values({
 			key: testKey,
 			value: "alpha",
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
 		})
 		.execute();
 
@@ -70,7 +70,7 @@ test("reads a global, untracked key (test fixture)", async () => {
 test("writes and reads a global, untracked key (test fixture)", async () => {
 	const testKey = nextTestKey("flashtype_test_untracked");
 	const defs = withKeyDef(testKey, {
-		defaultVersionId: "global",
+		defaultBranchId: "global",
 		untracked: true,
 	});
 	const lix = await openLix({});
@@ -99,17 +99,17 @@ test("writes and reads a global, untracked key (test fixture)", async () => {
 
 	await waitFor(() => expect((resultRef.current as any)?.[0]).toBe("beta"));
 
-	// Verify DB row persisted to key_value_by_version with lixcol_version_id = 'global'
+	// Verify DB row persisted to key_value_by_branch with lixcol_branch_id = 'global'
 	const rows = (await qb(lix)
-		.selectFrom("lix_key_value_by_version")
+		.selectFrom("lix_key_value_by_branch")
 		.where("key", "=", testKey)
-		.where("lixcol_version_id", "=", "global")
+		.where("lixcol_branch_id", "=", "global")
 		.select(["value"])
 		.execute()) as any;
 	expect(rows[0]?.value).toBe("beta");
 });
 
-test("writes and reads a tracked key on active version", async () => {
+test("writes and reads a tracked key on active branch", async () => {
 	const TEST_KEY = nextTestKey("flashtype_test_tracked");
 	const lix = await openLix({});
 	const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -151,17 +151,17 @@ test("writes and reads a tracked key on active version", async () => {
 test("shows Suspense fallback first, then renders value on initial read", async () => {
 	const testKey = nextTestKey("flashtype_test_untracked");
 	const defs = withKeyDef(testKey, {
-		defaultVersionId: "global",
+		defaultBranchId: "global",
 		untracked: true,
 	});
 	const lix = await openLix({});
 	// Ensure the key exists so the initial load resolves deterministically
 	await qb(lix)
-		.insertInto("lix_key_value_by_version")
+		.insertInto("lix_key_value_by_branch")
 		.values({
 			key: testKey,
 			value: "ready",
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
 		})
 		.execute();
 	const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -379,16 +379,16 @@ test("returns optimistic value immediately when setter is called", async () => {
 test("memoized children should not re-render when parent state changes", async () => {
 	const testKey = nextTestKey("flashtype_test_untracked");
 	const defs = withKeyDef(testKey, {
-		defaultVersionId: "global",
+		defaultBranchId: "global",
 		untracked: true,
 	});
 	const lix = await openLix({});
 	await qb(lix)
-		.insertInto("lix_key_value_by_version")
+		.insertInto("lix_key_value_by_branch")
 		.values({
 			key: testKey,
 			value: "initial",
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
 		})
 		.execute();
 
@@ -413,7 +413,7 @@ test("memoized children should not re-render when parent state changes", async (
 
 	function Parent() {
 		const pair = useKeyValue(testKey, {
-			defaultVersionId: "global",
+			defaultBranchId: "global",
 			untracked: true,
 		});
 		const [, forceRender] = React.useState(0);

@@ -21,7 +21,7 @@ vi.mock("@/lib/lix-kysely", () => ({
 		}),
 		selectFrom: () => ({
 			select: () => ({
-				executeTakeFirstOrThrow: async () => ({ version_id: "global" }),
+				executeTakeFirstOrThrow: async () => ({ branch_id: "global" }),
 			}),
 		}),
 	}),

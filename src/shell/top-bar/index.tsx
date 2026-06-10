@@ -14,7 +14,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { FlashtypeMenu } from "./flashtype-menu";
-import { VersionSwitcher } from "./version-switcher";
+import { BranchSwitcher } from "./branch-switcher";
 
 export type TopBarProps = {
 	readonly onToggleLeftSidebar?: () => void;
@@ -108,7 +108,7 @@ export function TopBar({
 						Toggle right panel ({rightShortcut})
 					</TooltipContent>
 				</Tooltip>
-				<VersionSwitcher />
+				<BranchSwitcher />
 			</div>
 			<div className="flex flex-1 justify-center">
 				{hasFiles ? (

@@ -30,15 +30,22 @@ function parseSnapshotContent<T>(value: unknown): T | null {
 	return value as T;
 }
 
-function snapshotNodeText(snapshot: MarkdownV2BlockSnapshot | null | undefined): string {
-	const node = snapshot?.node as { children?: Array<{ value?: string }> } | undefined;
+function snapshotNodeText(
+	snapshot: MarkdownV2BlockSnapshot | null | undefined,
+): string {
+	const node = snapshot?.node as
+		| { children?: Array<{ value?: string }> }
+		| undefined;
 	const children = Array.isArray(node?.children) ? node.children : [];
 	return children
 		.map((child) => (typeof child.value === "string" ? child.value : ""))
 		.join("");
 }
 
-async function readRootOrder(lix: Awaited<ReturnType<typeof openLix>>, fileId: string) {
+async function readRootOrder(
+	lix: Awaited<ReturnType<typeof openLix>>,
+	fileId: string,
+) {
 	const root = await qb(lix)
 		.selectFrom("lix_state")
 		.where("file_id", "=", fileId)
@@ -101,7 +108,7 @@ test("paste at start inserts before existing content (TipTap + Lix)", async () =
 			{
 				key: "lix_deterministic_mode",
 				value: { enabled: true },
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 			},
 		],
 	});

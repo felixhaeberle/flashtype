@@ -3,19 +3,19 @@ import {
 	type FlashtypeUiState,
 } from "@/shell/ui-state";
 
-export type KeyValueVersionId = "active" | "global" | string;
+export type KeyValueBranchId = "active" | "global" | string;
 
 export type KeyDef<V> = {
-	defaultVersionId: KeyValueVersionId;
+	defaultBranchId: KeyValueBranchId;
 	untracked: boolean;
 	defaultValue?: V | null;
 };
 
 // Flashtype keys + per-key defaults
 export const KEY_VALUE_DEFINITIONS = {
-	// Cross-version UI state, not change-controlled
+	// Cross-branch UI state, not change-controlled
 	flashtype_active_file_id: {
-		defaultVersionId: "global",
+		defaultBranchId: "global",
 		untracked: true,
 	} as KeyDef<string | null>,
 
@@ -23,7 +23,7 @@ export const KEY_VALUE_DEFINITIONS = {
 	 * Serialized layout snapshot for the v2 prototype (panels, tabs, focus).
 	 */
 	flashtype_ui_state: {
-		defaultVersionId: "global",
+		defaultBranchId: "global",
 		untracked: true,
 		defaultValue: DEFAULT_FLASHTYPE_UI_STATE,
 	} as KeyDef<FlashtypeUiState>,
@@ -32,7 +32,7 @@ export const KEY_VALUE_DEFINITIONS = {
 	 * Global app theme preference shared across views.
 	 */
 	flashtype_theme: {
-		defaultVersionId: "global",
+		defaultBranchId: "global",
 		untracked: true,
 		defaultValue: "light",
 	} as KeyDef<"light" | "dark">,
@@ -41,24 +41,24 @@ export const KEY_VALUE_DEFINITIONS = {
 	 * Developer setting controlling hidden-file visibility in the files widget.
 	 */
 	flashtype_show_hidden_files: {
-		defaultVersionId: "global",
+		defaultBranchId: "global",
 		untracked: true,
 		defaultValue: false,
 	} as KeyDef<boolean>,
 
 	// Test-only keys used in unit tests to exercise tracked behavior
 	flashtype_test_tracked: {
-		defaultVersionId: "active",
+		defaultBranchId: "active",
 		untracked: false,
 	} as KeyDef<string | null>,
 
 	flashtype_test_tracked_external: {
-		defaultVersionId: "active",
+		defaultBranchId: "active",
 		untracked: false,
 	} as KeyDef<string | null>,
 
 	flashtype_test_untracked: {
-		defaultVersionId: "global",
+		defaultBranchId: "global",
 		untracked: true,
 		defaultValue: null,
 	} as KeyDef<string | null>,

@@ -24,7 +24,7 @@ const KVDefsContext = createContext<KVDefs | null>(null);
 /**
  * Provides key-value definitions to `useKeyValue` within a React subtree.
  *
- * Pass in a map of key definitions (version scope, tracking, defaults) so the
+ * Pass in a map of key definitions (branch scope, tracking, defaults) so the
  * hook can infer behavior for known keys.
  *
  * @example
@@ -52,7 +52,7 @@ export function KeyValueProvider({
  * Options passed to `useKeyValue` to override defaults for a specific key.
  */
 export type UseKeyValueOptions = {
-	defaultVersionId?: "active" | "global" | string;
+	defaultBranchId?: "active" | "global" | string;
 	untracked?: boolean;
 };
 
@@ -136,13 +136,13 @@ function getDefaults(
 	key: string,
 	defs: Record<string, KeyDef<any>>,
 ): {
-	defaultVersionId: "active" | "global" | string;
+	defaultBranchId: "active" | "global" | string;
 	untracked: boolean;
 } {
 	const def = defs[key];
 	if (def) return def;
-	// Lix defaults: active version, tracked (untracked=false)
-	return { defaultVersionId: "active", untracked: false };
+	// Lix defaults: active branch, tracked (untracked=false)
+	return { defaultBranchId: "active", untracked: false };
 }
 
 // Overloads for strong typing on known keys
@@ -179,13 +179,13 @@ export function useKeyValue<K extends string>(
 	const providedDefs =
 		useContext(KVDefsContext) ?? (KEY_VALUE_DEFINITIONS as KVDefs);
 	const d = getDefaults(key as string, providedDefs);
-	const defaultVersionId = opts?.defaultVersionId ?? d.defaultVersionId;
+	const defaultBranchId = opts?.defaultBranchId ?? d.defaultBranchId;
 	const untracked = opts?.untracked ?? d.untracked;
 
 	// Subscribe to live updates and suspend on first load via useQuery
 	const rows = useQuery<{ value: unknown }>((lix) =>
 		selectValue(lix, key as string, {
-			defaultVersionId: String(defaultVersionId),
+			defaultBranchId: String(defaultBranchId),
 			untracked,
 		}),
 	);
@@ -245,11 +245,11 @@ export function useKeyValue<K extends string>(
 		async (newValue: ValueOf<K>) => {
 			setOptimisticValue(key as string, newValue as ValueOf<K> | null);
 			await upsertValue(lix, key as string, newValue as unknown, {
-				defaultVersionId: String(defaultVersionId),
+				defaultBranchId: String(defaultBranchId),
 				untracked,
 			});
 		},
-		[lix, key, defaultVersionId, untracked],
+		[lix, key, defaultBranchId, untracked],
 	);
 
 	const resolvedValue = optimistic.hasValue ? optimistic.value : value;
@@ -263,17 +263,17 @@ export function useKeyValue<K extends string>(
 function selectValue(
 	lix: Lix,
 	key: string,
-	opts: { defaultVersionId: string; untracked: boolean },
+	opts: { defaultBranchId: string; untracked: boolean },
 ) {
 	if (opts.untracked) {
-		const branchId = resolveUntrackedBranchId(opts.defaultVersionId);
+		const branchId = resolveUntrackedBranchId(opts.defaultBranchId);
 		return qb(lix)
 			.selectFrom("lix_key_value_by_branch")
 			.where("lixcol_branch_id", "=", branchId)
 			.where("key", "=", key)
 			.select(["value"]);
 	}
-	// tracked (change-controlled) — supported on active version
+	// tracked (change-controlled) — supported on active branch
 	return qb(lix)
 		.selectFrom("lix_key_value")
 		.where("key", "=", key)
@@ -284,13 +284,13 @@ async function upsertValue<T>(
 	lix: Lix,
 	key: string,
 	value: T,
-	opts: { defaultVersionId: string; untracked: boolean },
+	opts: { defaultBranchId: string; untracked: boolean },
 ) {
 	if (opts.untracked) {
 		const branchId =
-			opts.defaultVersionId === "active"
+			opts.defaultBranchId === "active"
 				? await lix.activeBranchId()
-				: opts.defaultVersionId;
+				: opts.defaultBranchId;
 
 		const updated = await qb(lix)
 			.updateTable("lix_key_value_by_branch")
@@ -322,19 +322,16 @@ async function upsertValue<T>(
 	if (Number(updated.numUpdatedRows ?? 0) > 0) {
 		return;
 	}
-	await qb(lix)
-		.insertInto("lix_key_value")
-		.values({ key, value })
-		.execute();
+	await qb(lix).insertInto("lix_key_value").values({ key, value }).execute();
 }
 
-function resolveUntrackedBranchId(defaultVersionId: string): string {
-	if (defaultVersionId === "active") {
+function resolveUntrackedBranchId(defaultBranchId: string): string {
+	if (defaultBranchId === "active") {
 		throw new Error(
 			"active untracked key-value reads are not supported by the main Lix branch surface",
 		);
 	}
-	return defaultVersionId;
+	return defaultBranchId;
 }
 
 function valuesEqual(a: unknown, b: unknown): boolean {

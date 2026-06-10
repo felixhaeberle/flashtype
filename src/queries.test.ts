@@ -178,11 +178,11 @@ describe("selectWorkingDiffCount", () => {
 
 		// Set active file to A and checkpoint initial inserts
 		await qb(lix)
-			.insertInto("lix_key_value_by_version")
+			.insertInto("lix_key_value_by_branch")
 			.values({
 				key: "flashtype_active_file_id",
 				value: fileA,
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 				lixcol_untracked: true,
 			})
 			.execute();
@@ -212,10 +212,10 @@ describe("selectWorkingDiffCount", () => {
 
 		// Switch active file to B
 		await qb(lix)
-			.updateTable("lix_key_value_by_version")
+			.updateTable("lix_key_value_by_branch")
 			.set({ value: fileB })
 			.where("key", "=", "flashtype_active_file_id")
-			.where("lixcol_version_id", "=", "global")
+			.where("lixcol_branch_id", "=", "global")
 			.execute();
 
 		const diffB = await selectWorkingDiffCount(lix).executeTakeFirst();
@@ -246,11 +246,11 @@ describe("selectWorkingDiffCount", () => {
 			.execute();
 
 		await qb(lix)
-			.insertInto("lix_key_value_by_version")
+			.insertInto("lix_key_value_by_branch")
 			.values({
 				key: "flashtype_active_file_id",
 				value: fileId,
-				lixcol_version_id: "global",
+				lixcol_branch_id: "global",
 				lixcol_untracked: true,
 			})
 			.execute();

@@ -1,5 +1,4 @@
 import type { Lix } from "@lix-js/sdk";
-import { qb } from "@/lib/lix-kysely";
 import { MARKDOWN_V2_SCHEMA_DEFINITIONS } from "./markdown-v2-schema";
 
 type MarkdownSchemaDefinition = Record<string, unknown>;
@@ -11,9 +10,9 @@ function normalizeSchemaVersion(version: string): string {
 /**
  * Ensures all plugin-md-v2 schema definitions are stored in the current Lix.
  *
- * Seeds `lix_stored_schema_by_version` with any schema definitions that are not
- * already present for the `global` version. Existing definitions are left
- * untouched, allowing schema upgrades to append newer versions safely.
+ * Ensures `lix_registered_schema` contains the markdown schemas on the target
+ * branch. Branch-local definitions are updated in place; inherited global
+ * definitions are left untouched and shadowed by a branch row when needed.
  *
  * @param lix - Active Lix instance to seed.
  *
@@ -22,69 +21,54 @@ function normalizeSchemaVersion(version: string): string {
  * await insertMarkdownSchemas({ lix });
  * ```
  */
-export async function insertMarkdownSchemas(args: { lix: Lix }): Promise<void> {
+export async function insertMarkdownSchemas(args: {
+	lix: Lix;
+	branchId?: string;
+}): Promise<void> {
 	const { lix } = args;
-	// TODO: remove `any` cast once @/lib/lix-kysely exports lix_stored_schema_by_version.
-	const db = qb(lix) as any;
-
-	const rows = (await db
-		.selectFrom("lix_stored_schema_by_version")
-		.select(["value"])
-		.where("lixcol_version_id", "=", "global")
-		.execute()) as Array<{ value: unknown }>;
-
-	const existing = new Set<string>();
-	for (const row of rows) {
-		const raw = row.value;
-		const parsed =
-			typeof raw === "string"
-				? (JSON.parse(raw) as Record<string, unknown>)
-				: ((raw as Record<string, unknown>) ?? null);
-		const schemaKey = parsed?.["x-lix-key"];
-		const schemaVersionRaw = parsed?.["x-lix-version"];
-		const schemaVersion =
-			typeof schemaVersionRaw === "string"
-				? normalizeSchemaVersion(schemaVersionRaw)
-				: undefined;
-		if (typeof schemaKey === "string" && typeof schemaVersion === "string") {
-			existing.add(`${schemaKey}:${schemaVersion}`);
-		}
-	}
-
-	const inserts: Array<{
-		value: MarkdownSchemaDefinition;
-		lixcol_version_id: "global";
-	}> = [];
+	const branchId = args.branchId ?? (await lix.activeBranchId());
 
 	for (const schema of MARKDOWN_V2_SCHEMA_DEFINITIONS) {
 		const schemaKey = schema["x-lix-key"];
-		const schemaVersionRaw = schema["x-lix-version"];
-		const schemaVersion =
-			typeof schemaVersionRaw === "string"
-				? normalizeSchemaVersion(schemaVersionRaw)
-				: undefined;
-		if (typeof schemaKey !== "string" || typeof schemaVersion !== "string") {
+		if (typeof schemaKey !== "string") {
 			continue;
 		}
-		const fingerprint = `${schemaKey}:${schemaVersion}`;
-		if (existing.has(fingerprint)) continue;
-		existing.add(fingerprint);
-		const normalizedSchema = {
-			...schema,
-			"x-lix-version": schemaVersion,
-		} as MarkdownSchemaDefinition;
-		inserts.push({
-			value: normalizedSchema,
-			lixcol_version_id: "global",
+		const schemaVersionRaw = schema["x-lix-version"];
+		const normalizedSchema =
+			typeof schemaVersionRaw === "string"
+				? ({
+						...schema,
+						"x-lix-version": normalizeSchemaVersion(schemaVersionRaw),
+					} as MarkdownSchemaDefinition)
+				: schema;
+		const existing = await lix.execute(
+			"SELECT value, lixcol_global FROM lix_registered_schema_by_branch WHERE lixcol_entity_pk = lix_json(?) AND lixcol_branch_id = ?",
+			[JSON.stringify([schemaKey]), branchId],
+		);
+		const globalColumnIndex = existing.columns.indexOf("lixcol_global");
+		const hasBranchLocalRow = existing.rows.some((row: any) => {
+			const value =
+				typeof row?.get === "function"
+					? row.get("lixcol_global")
+					: Array.isArray(row)
+						? row[globalColumnIndex]
+						: row?.lixcol_global;
+			return value !== true && value !== 1 && value !== "true";
 		});
-	}
-
-	if (inserts.length === 0) return;
-
-	for (const insert of inserts) {
+		if (hasBranchLocalRow) {
+			await lix.execute(
+				"UPDATE lix_registered_schema_by_branch SET value = lix_json(?) WHERE lixcol_entity_pk = lix_json(?) AND lixcol_branch_id = ?",
+				[
+					JSON.stringify(normalizedSchema),
+					JSON.stringify([schemaKey]),
+					branchId,
+				],
+			);
+			continue;
+		}
 		await lix.execute(
-			"INSERT INTO lix_stored_schema_by_version (value, lixcol_version_id) VALUES (lix_json(?1), ?2) ON CONFLICT (entity_id, file_id, version_id) DO NOTHING",
-			[JSON.stringify(insert.value), insert.lixcol_version_id],
+			"INSERT INTO lix_registered_schema_by_branch (value, lixcol_branch_id, lixcol_global, lixcol_untracked) VALUES (lix_json(?), ?, ?, false)",
+			[JSON.stringify(normalizedSchema), branchId, branchId === "global"],
 		);
 	}
 }

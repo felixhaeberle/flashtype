@@ -10,9 +10,9 @@ import {
 } from "@testing-library/react";
 import { LixProvider } from "@/lib/lix-react";
 import { openLix, type Lix } from "@lix-js/sdk";
-import { VersionSwitcher } from "./version-switcher";
+import { BranchSwitcher } from "./branch-switcher";
 
-describe("VersionSwitcher", () => {
+describe("BranchSwitcher", () => {
 	let lix: Lix;
 	let cleanupFns: Array<() => Promise<void>> = [];
 
@@ -21,7 +21,7 @@ describe("VersionSwitcher", () => {
 			render(
 				<LixProvider lix={lix}>
 					<Suspense fallback={null}>
-						<VersionSwitcher />
+						<BranchSwitcher />
 					</Suspense>
 				</LixProvider>,
 			);
@@ -32,16 +32,12 @@ describe("VersionSwitcher", () => {
 		lix = await openLix({});
 		cleanupFns.push(() => lix.close());
 
-		const activeVersion = await qb(lix)
-			.selectFrom("lix_active_version")
-			.innerJoin("lix_version", "lix_version.id", "lix_active_version.version_id")
-			.select(["lix_version.id"])
-			.executeTakeFirstOrThrow();
+		const activeBranchId = await lix.activeBranchId();
 
 		await qb(lix)
-			.updateTable("lix_version")
+			.updateTable("lix_branch")
 			.set({ name: "main" })
-			.where("id", "=", activeVersion.id)
+			.where("id", "=", activeBranchId)
 			.execute();
 	});
 
@@ -53,23 +49,23 @@ describe("VersionSwitcher", () => {
 		}
 	});
 
-	test("renders the active version name", async () => {
+	test("renders the active branch name", async () => {
 		await renderWithProviders();
 
 		const trigger = await screen.findByRole("button", {
-			name: "Select version",
+			name: "Select branch",
 		});
 		expect(trigger).toHaveTextContent("main");
 	});
 
-test("switches to another version when selected", async () => {
+	test("switches to another branch when selected", async () => {
 		const draftName = `draft-${Math.random().toString(36).slice(2, 7)}`;
-			const newVersion = await lix.createBranch({ name: draftName });
+		const newBranch = await lix.createBranch({ name: draftName });
 
 		await renderWithProviders();
 
 		const trigger = await screen.findByRole("button", {
-			name: "Select version",
+			name: "Select branch",
 		});
 
 		await act(async () => {
@@ -85,24 +81,24 @@ test("switches to another version when selected", async () => {
 
 		await waitFor(() => {
 			expect(
-				screen.getByRole("button", { name: "Select version" }),
+				screen.getByRole("button", { name: "Select branch" }),
 			).toHaveTextContent(draftName);
 		});
 
 		await waitFor(async () => {
-				const active = await qb(lix)
-					.selectFrom("lix_key_value")
-					.where("key", "=", "lix_workspace_branch_id")
-					.select("value")
-					.executeTakeFirstOrThrow();
-				expect(active.value).toBe(newVersion.id);
-			});
+			const active = await qb(lix)
+				.selectFrom("lix_key_value")
+				.where("key", "=", "lix_workspace_branch_id")
+				.select("value")
+				.executeTakeFirstOrThrow();
+			expect(active.value).toBe(newBranch.id);
 		});
+	});
 
-test("renames a version via actions menu", async () => {
+	test("renames a branch via actions menu", async () => {
 		const baseName = `docs-${Math.random().toString(36).slice(2, 7)}`;
 		const renamedName = `${baseName}-renamed`;
-			const target = await lix.createBranch({ name: baseName });
+		const target = await lix.createBranch({ name: baseName });
 		const promptSpy = vi.fn().mockReturnValue(renamedName);
 		vi.stubGlobal("prompt", promptSpy);
 
@@ -110,15 +106,15 @@ test("renames a version via actions menu", async () => {
 
 		await act(async () => {
 			fireEvent.pointerDown(
-				screen.getByRole("button", { name: "Select version" }),
+				screen.getByRole("button", { name: "Select branch" }),
 			);
 			fireEvent.pointerUp(
-				screen.getByRole("button", { name: "Select version" }),
+				screen.getByRole("button", { name: "Select branch" }),
 			);
 		});
 
 		const actionsButton = await screen.findByRole("button", {
-			name: `Version actions for ${baseName}`,
+			name: `Branch actions for ${baseName}`,
 		});
 		await act(async () => {
 			fireEvent.pointerDown(actionsButton, { button: 0 });
@@ -134,17 +130,17 @@ test("renames a version via actions menu", async () => {
 			expect(screen.getByText(renamedName)).toBeInTheDocument();
 		});
 
-			const row = await qb(lix)
-				.selectFrom("lix_branch")
-				.select(["id", "name"])
-				.where("id", "=", target.id)
+		const row = await qb(lix)
+			.selectFrom("lix_branch")
+			.select(["id", "name"])
+			.where("id", "=", target.id)
 			.executeTakeFirstOrThrow();
 		expect(row.name).toBe(renamedName);
 	});
 
-test("deletes a version via actions menu", async () => {
+	test("deletes a branch via actions menu", async () => {
 		const tempName = `temp-${Math.random().toString(36).slice(2, 7)}`;
-			const target = await lix.createBranch({ name: tempName });
+		const target = await lix.createBranch({ name: tempName });
 		const confirmSpy = vi.fn().mockReturnValue(true);
 		vi.stubGlobal("confirm", confirmSpy);
 
@@ -152,15 +148,15 @@ test("deletes a version via actions menu", async () => {
 
 		await act(async () => {
 			fireEvent.pointerDown(
-				screen.getByRole("button", { name: "Select version" }),
+				screen.getByRole("button", { name: "Select branch" }),
 			);
 			fireEvent.pointerUp(
-				screen.getByRole("button", { name: "Select version" }),
+				screen.getByRole("button", { name: "Select branch" }),
 			);
 		});
 
 		const actionsButton = await screen.findByRole("button", {
-			name: `Version actions for ${tempName}`,
+			name: `Branch actions for ${tempName}`,
 		});
 		await act(async () => {
 			fireEvent.pointerDown(actionsButton, { button: 0 });
@@ -174,10 +170,10 @@ test("deletes a version via actions menu", async () => {
 
 		await act(async () => {
 			fireEvent.pointerDown(
-				screen.getByRole("button", { name: "Select version" }),
+				screen.getByRole("button", { name: "Select branch" }),
 			);
 			fireEvent.pointerUp(
-				screen.getByRole("button", { name: "Select version" }),
+				screen.getByRole("button", { name: "Select branch" }),
 			);
 		});
 
@@ -188,35 +184,32 @@ test("deletes a version via actions menu", async () => {
 		});
 
 		const row = await qb(lix)
-			.selectFrom("lix_version")
+			.selectFrom("lix_branch")
 			.select(["id", "hidden"])
 			.where("id", "=", target.id)
 			.executeTakeFirstOrThrow();
 		expect(row.hidden).toBeTruthy();
 
-		const active = await qb(lix)
-			.selectFrom("lix_active_version")
-			.select("version_id")
-			.executeTakeFirstOrThrow();
-		expect(active.version_id).not.toBe(target.id);
+		const activeBranchId = await lix.activeBranchId();
+		expect(activeBranchId).not.toBe(target.id);
 
 		confirmSpy.mockRestore();
 	});
 
-	test("delete action is disabled for active version", async () => {
+	test("delete action is disabled for active branch", async () => {
 		await renderWithProviders();
 
 		await act(async () => {
 			fireEvent.pointerDown(
-				screen.getByRole("button", { name: "Select version" }),
+				screen.getByRole("button", { name: "Select branch" }),
 			);
 			fireEvent.pointerUp(
-				screen.getByRole("button", { name: "Select version" }),
+				screen.getByRole("button", { name: "Select branch" }),
 			);
 		});
 
 		const actionsButton = await screen.findByRole("button", {
-			name: "Version actions for main",
+			name: "Branch actions for main",
 		});
 		await act(async () => {
 			fireEvent.pointerDown(actionsButton, { button: 0 });

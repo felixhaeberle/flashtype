@@ -6,6 +6,6 @@ For example:
 
 - What's the writing style you prefer?
 
-- Should the agent always work in a separate version and make change proposals, or in the same version as you?
+- Should the agent always work in a separate branch and make change proposals, or in the same branch as you?
 
 - What are things the agent should always do, never do, or remember?

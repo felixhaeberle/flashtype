@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
-import { qb } from "@/lib/lix-kysely";
+import { qb, sql } from "@/lib/lix-kysely";
 import { useEditorCtx } from "./editor-context";
 import { useLix, useQueryTakeFirst } from "@/lib/lix-react";
 import { useKeyValue } from "@/hooks/key-value/use-key-value";
@@ -88,11 +88,19 @@ function TipTapEditorContent({
 	readonly activeFileId?: string | null;
 }) {
 	const lix = useLix();
+	const activeBranch = useQueryTakeFirst<{ value: string }>((lix) =>
+		qb(lix)
+			.selectFrom("lix_key_value")
+			.where("key", "=", "lix_workspace_branch_id")
+			.select(["value"]),
+	);
+	const activeBranchId = String(activeBranch?.value ?? "");
 	const initialFile = useQueryTakeFirst(
 		(lix) =>
 			qb(lix)
 				.selectFrom("lix_file")
 				.select("data")
+				.select(() => [sql<string>`${activeBranchId}`.as("active_branch_id")])
 				.where("id", "=", activeFileId ?? ""),
 		{ subscribe: false },
 	);
@@ -129,6 +137,7 @@ function TipTapEditorContent({
 	}, [
 		lix,
 		activeFileId,
+		activeBranchId,
 		PERSIST_DEBOUNCE_MS,
 		writerKey,
 		hasInitialFile,
@@ -227,7 +236,7 @@ function TipTapEditorContent({
 			closed = true;
 			events.close();
 		};
-	}, [lix, editor, activeFileId, writerKey]);
+	}, [lix, editor, activeFileId, activeBranchId, writerKey]);
 
 	useEffect(() => {
 		hasAutoFocusedRef.current = false;
@@ -263,7 +272,7 @@ function TipTapEditorContent({
 		return () => {
 			cancelled = true;
 		};
-	}, [lix, activeFileId, initialAstLoaded]);
+	}, [lix, activeFileId, activeBranchId, initialAstLoaded]);
 
 	useEffect(() => {
 		if (!editor) return;
@@ -304,7 +313,7 @@ function TipTapEditorContent({
 					editor={editor}
 					className="tiptap w-full max-w-5xl mx-auto"
 					data-testid="tiptap-editor"
-					key={activeFileId ?? "no-file"}
+					key={`${activeBranchId}:${activeFileId ?? "no-file"}`}
 				/>
 			</div>
 		</div>
