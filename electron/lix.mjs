@@ -38,7 +38,7 @@ export async function ensureLixOpen(parentWindow) {
 				const nativeLix = await openLix({
 					backend: new FsBackend({ path: workspaceDir }),
 				});
-				await ensureDefaultPluginsInstalled(nativeLix);
+				await ensureDefaultPluginsInstalledOnCurrentBranch(nativeLix);
 				return createDesktopLixHandle(nativeLix, workspaceDir);
 			})();
 			lixPromise = openingPromise;
@@ -73,7 +73,7 @@ async function chooseWorkspaceDir(parentWindow) {
 	return workspaceDir;
 }
 
-async function ensureDefaultPluginsInstalled(lix) {
+async function ensureDefaultPluginsInstalledOnCurrentBranch(lix) {
 	for (const plugin of await bundledPluginArchives()) {
 		const existing = await lix.fs.readFile(plugin.path);
 		if (existing === undefined) {
@@ -207,7 +207,11 @@ function createDesktopLixHandle(nativeLix, workspaceDir) {
 			};
 		},
 		async switchBranch(options) {
-			return await runQueued(() => nativeLix.switchBranch(options));
+			return await runQueued(async () => {
+				const receipt = await nativeLix.switchBranch(options);
+				await ensureDefaultPluginsInstalledOnCurrentBranch(nativeLix);
+				return receipt;
+			});
 		},
 		async exportSnapshot() {
 			return await readFile(path.join(workspaceDir, ".lix"));
