@@ -5,7 +5,7 @@ import { FsBackend, bundledPluginArchives, openLix } from "@lix-js/sdk";
 
 let lixPromise = null;
 let chosenWorkspaceDir = null;
-let requestedOpenPath = null;
+let requestedOpenPath = undefined;
 let lifecycle = Promise.resolve();
 
 function enqueue(operation) {
@@ -27,8 +27,14 @@ async function getLixWorkspaceDir(parentWindow) {
 }
 
 function getWorkspacePathArgument(argv) {
-	const argumentOffset = process.defaultApp === true ? 2 : 1;
-	return argv[argumentOffset];
+	// Playwright/Electron can prepend runtime flags before app arguments.
+	const appArguments = argv.slice(1).filter((argument) => {
+		return argument !== "--" && !argument.startsWith("--");
+	});
+	if (process.defaultApp === true) {
+		appArguments.shift();
+	}
+	return appArguments[0];
 }
 
 export function setRequestedOpenPath(filePath) {

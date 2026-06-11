@@ -41,3 +41,52 @@ jobs:
         run: pnpm install
 
       - run: pnpm run ci
+
+  macos-packaged-app:
+    runs-on: macos-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install Rust wasm tools
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo install wasm-bindgen-cli --version 0.2.108 --locked
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build macOS assets
+        run: pnpm run package:mac
+
+      - name: Verify macOS app signature (diagnostic)
+        continue-on-error: true
+        run: codesign --verify --deep --strict --verbose=2 release/mac-arm64/Flashtype.app
+
+      - name: Test packaged macOS app
+        run: pnpm run test:e2e:packaged-macos
+
+      - name: Upload packaged macOS diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-packaged-app-diagnostics
+          if-no-files-found: ignore
+          path: |
+            release/*.dmg
+            release/*.zip
+            test-results
+            playwright-report

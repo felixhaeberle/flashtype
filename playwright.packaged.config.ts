@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
 	testDir: "./e2e",
-	testIgnore: ["**/packaged-macos.spec.ts"],
+	testMatch: "packaged-macos.spec.ts",
 	fullyParallel: false,
 	workers: 1,
 	timeout: 180_000,
@@ -13,12 +13,5 @@ export default defineConfig({
 	use: {
 		trace: "retain-on-failure",
 		video: "retain-on-failure",
-	},
-	webServer: {
-		command:
-			"node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4173 --strictPort",
-		url: "http://127.0.0.1:4173",
-		reuseExistingServer: !process.env.CI,
-		timeout: 120_000,
 	},
 });
