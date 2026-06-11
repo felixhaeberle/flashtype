@@ -1,5 +1,6 @@
 import React from "react";
 import { test, expect, vi } from "vitest";
+import { qb } from "@/lib/lix-kysely";
 import {
 	render,
 	renderHook,
@@ -7,37 +8,55 @@ import {
 	waitFor,
 	act,
 } from "@testing-library/react";
-import { LixProvider } from "@lix-js/react-utils";
-import { openLix } from "@lix-js/sdk";
+import { LixProvider } from "@/lib/lix-react";
+import { openLix } from "@/test-utils/node-lix-sdk";
 import { useKeyValue, KeyValueProvider } from "./use-key-value";
 import { KEY_VALUE_DEFINITIONS } from "./schema";
 
-const UNTRACKED_TEST_KEY = "flashtype_test_untracked";
+function nextTestKey(base: string): string {
+	return `${base}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function withKeyDef(
+	key: string,
+	def: { defaultBranchId: "active" | "global" | string; untracked: boolean },
+) {
+	return {
+		...KEY_VALUE_DEFINITIONS,
+		[key]: def,
+	} as any;
+}
 
 test("reads a global, untracked key (test fixture)", async () => {
+	const testKey = nextTestKey("flashtype_test_untracked");
+	const defs = withKeyDef(testKey, {
+		defaultBranchId: "global",
+		untracked: true,
+	});
 	const lix = await openLix({});
 	const wrapper = ({ children }: { children: React.ReactNode }) => (
 		<LixProvider lix={lix}>
-			<KeyValueProvider defs={KEY_VALUE_DEFINITIONS}>
+			<KeyValueProvider defs={defs}>
 				<React.Suspense fallback={null}>{children}</React.Suspense>
 			</KeyValueProvider>
 		</LixProvider>
 	);
 
 	// Pre-insert expected value
-	await lix.db
-		.insertInto("key_value_by_version")
+	await qb(lix)
+		.insertInto("lix_key_value_by_branch")
 		.values({
-			key: UNTRACKED_TEST_KEY,
+			key: testKey,
 			value: "alpha",
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
+			lixcol_global: true,
 		})
 		.execute();
 
 	let hookResult: { current: unknown } = { current: null };
 
 	await act(async () => {
-		const { result } = renderHook(() => useKeyValue(UNTRACKED_TEST_KEY), {
+		const { result } = renderHook(() => useKeyValue(testKey), {
 			wrapper,
 		});
 		hookResult = result as unknown as { current: unknown };
@@ -50,10 +69,15 @@ test("reads a global, untracked key (test fixture)", async () => {
 });
 
 test("writes and reads a global, untracked key (test fixture)", async () => {
+	const testKey = nextTestKey("flashtype_test_untracked");
+	const defs = withKeyDef(testKey, {
+		defaultBranchId: "global",
+		untracked: true,
+	});
 	const lix = await openLix({});
 	const wrapper = ({ children }: { children: React.ReactNode }) => (
 		<LixProvider lix={lix}>
-			<KeyValueProvider defs={KEY_VALUE_DEFINITIONS}>
+			<KeyValueProvider defs={defs}>
 				<React.Suspense fallback={null}>{children}</React.Suspense>
 			</KeyValueProvider>
 		</LixProvider>
@@ -61,7 +85,7 @@ test("writes and reads a global, untracked key (test fixture)", async () => {
 
 	let resultRef: { current: unknown } = { current: null };
 	await act(async () => {
-		const { result } = renderHook(() => useKeyValue(UNTRACKED_TEST_KEY), {
+		const { result } = renderHook(() => useKeyValue(testKey), {
 			wrapper,
 		});
 		resultRef = result as unknown as { current: unknown };
@@ -76,17 +100,18 @@ test("writes and reads a global, untracked key (test fixture)", async () => {
 
 	await waitFor(() => expect((resultRef.current as any)?.[0]).toBe("beta"));
 
-	// Verify DB row persisted to key_value_by_version with lixcol_version_id = 'global'
-	const rows = (await lix.db
-		.selectFrom("key_value_by_version")
-		.where("key", "=", UNTRACKED_TEST_KEY)
-		.where("lixcol_version_id", "=", "global")
+	// Verify DB row persisted to key_value_by_branch with lixcol_branch_id = 'global'
+	const rows = (await qb(lix)
+		.selectFrom("lix_key_value_by_branch")
+		.where("key", "=", testKey)
+		.where("lixcol_branch_id", "=", "global")
 		.select(["value"])
 		.execute()) as any;
 	expect(rows[0]?.value).toBe("beta");
 });
 
-test("writes and reads a tracked key on active version", async () => {
+test("writes and reads a tracked key on active branch", async () => {
+	const TEST_KEY = nextTestKey("flashtype_test_tracked");
 	const lix = await openLix({});
 	const wrapper = ({ children }: { children: React.ReactNode }) => (
 		<LixProvider lix={lix}>
@@ -95,8 +120,6 @@ test("writes and reads a tracked key on active version", async () => {
 			</KeyValueProvider>
 		</LixProvider>
 	);
-
-	const TEST_KEY = "flashtype_test_tracked";
 
 	let hookResult: { current: unknown } = { current: null };
 	await act(async () => {
@@ -118,28 +141,122 @@ test("writes and reads a tracked key on active version", async () => {
 	});
 
 	// Verify DB row persisted to tracked table
-	const rows = (await lix.db
-		.selectFrom("key_value")
+	const rows = (await qb(lix)
+		.selectFrom("lix_key_value")
 		.where("key", "=", TEST_KEY)
 		.select(["value"])
 		.execute()) as any;
 	expect(rows[0]?.value).toBe("hello");
 });
 
-test("shows Suspense fallback first, then renders value on initial read", async () => {
+test("writes and reads an untracked key on active branch", async () => {
+	const testKey = nextTestKey("flashtype_test_active_untracked");
+	const defs = withKeyDef(testKey, {
+		defaultBranchId: "active",
+		untracked: true,
+	});
 	const lix = await openLix({});
-	// Ensure the key exists so the initial load resolves deterministically
-	await lix.db
-		.insertInto("key_value_by_version")
+	const activeBranchId = await lix.activeBranchId();
+	const wrapper = ({ children }: { children: React.ReactNode }) => (
+		<LixProvider lix={lix}>
+			<KeyValueProvider defs={defs}>
+				<React.Suspense fallback={null}>{children}</React.Suspense>
+			</KeyValueProvider>
+		</LixProvider>
+	);
+
+	let hookResult: { current: unknown } = { current: null };
+	await act(async () => {
+		const { result } = renderHook(() => useKeyValue(testKey), { wrapper });
+		hookResult = result as unknown as { current: unknown };
+	});
+
+	await waitFor(() => Array.isArray(hookResult.current as any));
+	await act(async () => {
+		await (hookResult.current as any)[1]("local");
+	});
+	await waitFor(() => expect((hookResult.current as any)[0]).toBe("local"));
+
+	const rows = (await qb(lix)
+		.selectFrom("lix_key_value_by_branch")
+		.where("key", "=", testKey)
+		.where("lixcol_branch_id", "=", activeBranchId)
+		.select(["value", "lixcol_global", "lixcol_untracked"])
+		.execute()) as any;
+	expect(rows[0]).toMatchObject({
+		value: "local",
+		lixcol_global: false,
+		lixcol_untracked: true,
+	});
+});
+
+test("reads explicit global key when active branch has same key", async () => {
+	const testKey = nextTestKey("flashtype_test_global_shadowed");
+	const defs = withKeyDef(testKey, {
+		defaultBranchId: "global",
+		untracked: true,
+	});
+	const lix = await openLix({});
+	const activeBranchId = await lix.activeBranchId();
+	await qb(lix)
+		.insertInto("lix_key_value_by_branch")
 		.values({
-			key: UNTRACKED_TEST_KEY,
-			value: "ready",
-			lixcol_version_id: "global",
+			key: testKey,
+			value: "global-value",
+			lixcol_branch_id: "global",
+			lixcol_global: true,
+			lixcol_untracked: true,
+		})
+		.execute();
+	await qb(lix)
+		.insertInto("lix_key_value_by_branch")
+		.values({
+			key: testKey,
+			value: "active-value",
+			lixcol_branch_id: activeBranchId,
+			lixcol_global: false,
+			lixcol_untracked: true,
 		})
 		.execute();
 	const wrapper = ({ children }: { children: React.ReactNode }) => (
 		<LixProvider lix={lix}>
-			<KeyValueProvider defs={KEY_VALUE_DEFINITIONS}>
+			<KeyValueProvider defs={defs}>
+				<React.Suspense fallback={null}>{children}</React.Suspense>
+			</KeyValueProvider>
+		</LixProvider>
+	);
+
+	let hookResult: { current: unknown } = { current: null };
+	await act(async () => {
+		const { result } = renderHook(() => useKeyValue(testKey), { wrapper });
+		hookResult = result as unknown as { current: unknown };
+	});
+
+	await waitFor(() =>
+		expect((hookResult.current as any)?.[0]).toBe("global-value"),
+	);
+});
+
+test("shows Suspense fallback first, then renders value on initial read", async () => {
+	const testKey = nextTestKey("flashtype_test_untracked");
+	const defs = withKeyDef(testKey, {
+		defaultBranchId: "global",
+		untracked: true,
+	});
+	const lix = await openLix({});
+	// Ensure the key exists so the initial load resolves deterministically
+	await qb(lix)
+		.insertInto("lix_key_value_by_branch")
+		.values({
+			key: testKey,
+			value: "ready",
+			lixcol_branch_id: "global",
+			lixcol_global: true,
+		})
+		.execute();
+	const wrapper = ({ children }: { children: React.ReactNode }) => (
+		<LixProvider lix={lix}>
+			<KeyValueProvider defs={defs}>
 				<React.Suspense fallback={<div data-testid="fb">loading</div>}>
 					{children}
 				</React.Suspense>
@@ -148,7 +265,7 @@ test("shows Suspense fallback first, then renders value on initial read", async 
 	);
 
 	function ReadKV() {
-		const [val] = useKeyValue(UNTRACKED_TEST_KEY);
+		const [val] = useKeyValue(testKey);
 		return <div data-testid="val">{String(val)}</div>;
 	}
 
@@ -161,7 +278,12 @@ test("shows Suspense fallback first, then renders value on initial read", async 
 });
 
 test("re-renders when key value changes externally", async () => {
+	const TEST_KEY = nextTestKey("flashtype_test_tracked_external");
 	const lix = await openLix({});
+	await qb(lix)
+		.insertInto("lix_key_value")
+		.values({ key: TEST_KEY, value: "initial" })
+		.execute();
 	const wrapper = ({ children }: { children: React.ReactNode }) => (
 		<LixProvider lix={lix}>
 			<KeyValueProvider defs={KEY_VALUE_DEFINITIONS}>
@@ -170,8 +292,6 @@ test("re-renders when key value changes externally", async () => {
 		</LixProvider>
 	);
 
-	const TEST_KEY = "flashtype_test_tracked_external";
-
 	let resultRef: { current: unknown } = { current: null };
 	await act(async () => {
 		const { result } = renderHook(() => useKeyValue(TEST_KEY), { wrapper });
@@ -179,17 +299,12 @@ test("re-renders when key value changes externally", async () => {
 	});
 	// wait for initial suspense resolution
 	await waitFor(() => Array.isArray(resultRef.current as any));
-
-	// set initial value via hook
-	await act(async () => {
-		await (resultRef.current as any)[1]("initial");
-	});
 	await waitFor(() => expect((resultRef.current as any)[0]).toBe("initial"));
 
 	// mutate externally (simulate another part of app)
 	await act(async () => {
-		await lix.db
-			.updateTable("key_value")
+		await qb(lix)
+			.updateTable("lix_key_value")
 			.set({ value: "external" })
 			.where("key", "=", TEST_KEY)
 			.execute();
@@ -210,10 +325,10 @@ function createDeferred<T>() {
 }
 
 test("shares optimistic updates across hook instances", async () => {
+	const SHARED_KEY = nextTestKey("flashtype_test_tracked_shared_optimistic");
 	const lix = await openLix({});
-	const SHARED_KEY = "flashtype_test_tracked_shared_optimistic" as const;
-	await lix.db
-		.insertInto("key_value")
+	await qb(lix)
+		.insertInto("lix_key_value")
 		.values({ key: SHARED_KEY, value: "initial" })
 		.execute();
 
@@ -269,29 +384,30 @@ test("shares optimistic updates across hook instances", async () => {
 		);
 	});
 
-	await waitFor(() => setValueRef != null);
+	await waitFor(() => expect(setValueRef).not.toBeNull());
 	await waitFor(() =>
-		snapshots.some(
-			(snapshot) =>
-				snapshot.primary === "initial" && snapshot.secondary === "initial",
-		),
+		expect(
+			snapshots.some(
+				(snapshot) =>
+					snapshot.primary === "initial" && snapshot.secondary === "initial",
+			),
+		).toBe(true),
 	);
 
 	const gate = createDeferred<void>();
-	const originalTransaction = lix.db.transaction.bind(lix.db);
-	const transactionSpy = vi
-		.spyOn(lix.db, "transaction")
-		.mockImplementation(() => {
-			const tx = originalTransaction();
-			const originalExecute = tx.execute.bind(tx);
-			(tx as any).execute = (async (cb: Parameters<typeof tx.execute>[0]) => {
-				return originalExecute(async (trx) => {
-					const result = await cb(trx);
-					await gate.promise;
-					return result;
-				});
-			}) as typeof tx.execute;
-			return tx as any;
+	const originalExecute = lix.execute.bind(lix);
+	const executeSpy = vi
+		.spyOn(lix, "execute")
+		.mockImplementation(async (...args) => {
+			const [sql] = args;
+			if (
+				typeof sql === "string" &&
+				sql.includes("INSERT INTO") &&
+				sql.includes("lix_key_value")
+			) {
+				await gate.promise;
+			}
+			return originalExecute(...args);
 		});
 
 	let pendingWrite: Promise<void> | null = null;
@@ -302,7 +418,9 @@ test("shares optimistic updates across hook instances", async () => {
 	});
 
 	await waitFor(() =>
-		snapshots.some((snapshot) => snapshot.primary === "next"),
+		expect(snapshots.some((snapshot) => snapshot.primary === "next")).toBe(
+			true,
+		),
 	);
 	const latest = snapshots[snapshots.length - 1];
 	expect(latest).toMatchObject({
@@ -315,7 +433,7 @@ test("shares optimistic updates across hook instances", async () => {
 		await pendingWrite;
 	});
 
-	transactionSpy.mockRestore();
+	executeSpy.mockRestore();
 });
 
 test("returns optimistic value immediately when setter is called", async () => {
@@ -352,19 +470,25 @@ test("returns optimistic value immediately when setter is called", async () => {
 });
 
 test("memoized children should not re-render when parent state changes", async () => {
+	const testKey = nextTestKey("flashtype_test_untracked");
+	const defs = withKeyDef(testKey, {
+		defaultBranchId: "global",
+		untracked: true,
+	});
 	const lix = await openLix({});
-	await lix.db
-		.insertInto("key_value_by_version")
+	await qb(lix)
+		.insertInto("lix_key_value_by_branch")
 		.values({
-			key: UNTRACKED_TEST_KEY,
+			key: testKey,
 			value: "initial",
-			lixcol_version_id: "global",
+			lixcol_branch_id: "global",
+			lixcol_global: true,
 		})
 		.execute();
 
 	const wrapper = ({ children }: { children: React.ReactNode }) => (
 		<LixProvider lix={lix}>
-			<KeyValueProvider defs={KEY_VALUE_DEFINITIONS}>
+			<KeyValueProvider defs={defs}>
 				<React.Suspense fallback={null}>{children}</React.Suspense>
 			</KeyValueProvider>
 		</LixProvider>
@@ -382,8 +506,8 @@ test("memoized children should not re-render when parent state changes", async (
 	});
 
 	function Parent() {
-		const pair = useKeyValue(UNTRACKED_TEST_KEY, {
-			defaultVersionId: "global",
+		const pair = useKeyValue(testKey, {
+			defaultBranchId: "global",
 			untracked: true,
 		});
 		const [, forceRender] = React.useState(0);

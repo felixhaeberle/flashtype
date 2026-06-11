@@ -1,3 +1,6 @@
 [submodule "lix"]
-	path = lix
+	path = submodule/lix
 	url = https://github.com/opral/lix.git
+[submodule "submodule/markdown-wc"]
+	path = submodule/markdown-wc
+	url = https://github.com/opral/markdown-wc.git

@@ -1,6 +1,4 @@
-import type { Lix } from "@lix-js/sdk";
-import { newLixFile, openLix, createCheckpoint } from "@lix-js/sdk";
-import mdPlugin from "@lix-js/plugin-md?raw";
+import type { Lix } from "@/lib/lix-types";
 
 // Raw-import seed markdown content via Vite
 // eslint-disable-next-line import/no-unresolved
@@ -13,6 +11,7 @@ import changelog from "./changelog.md?raw";
 import welcome from "./welcome.md?raw";
 // eslint-disable-next-line import/no-unresolved
 import agentsSeed from "./AGENTS.md?raw";
+import { qb } from "@/lib/lix-kysely";
 
 const encoder = new TextEncoder();
 
@@ -26,64 +25,84 @@ const SEED_DOCS: SeedDoc[] = [
 ];
 
 export async function seedMarkdownFiles(lix: Lix): Promise<void> {
-	for (const doc of SEED_DOCS) {
-		const exists = await lix.db
-			.selectFrom("file")
-			.where("path", "=", doc.path)
-			.select(["path"]) // small row
-			.executeTakeFirst();
+	await qb(lix)
+		.transaction()
+		.execute(async (trx) => {
+			for (const doc of SEED_DOCS) {
+				const exists = await trx
+					.selectFrom("lix_file")
+					.where("path", "=", doc.path)
+					.select(["path"])
+					.executeTakeFirst();
 
-		const data = encoder.encode(doc.content);
-		if (exists) {
-			await lix.db
-				.updateTable("file")
-				.set({ data })
-				.where("path", "=", doc.path)
-				.execute();
-		} else {
-			await lix.db
-				.insertInto("file")
-				.values({ path: doc.path, data })
-				.execute();
-		}
-	}
+				const data = encoder.encode(doc.content);
+				if (exists) {
+					await trx
+						.updateTable("lix_file")
+						.set({ data })
+						.where("path", "=", doc.path)
+						.execute();
+				} else {
+					await trx
+						.insertInto("lix_file")
+						.values({ path: doc.path, data })
+						.execute();
+				}
+			}
+		});
 }
 
 export async function ensureAgentsFile(lix: Lix): Promise<void> {
-	const exists = await lix.db
-		.selectFrom("file")
-		.where("path", "=", "/AGENTS.md")
-		.select(["path"])
-		.executeTakeFirst();
+	await qb(lix)
+		.transaction()
+		.execute(async (trx) => {
+			const exists = await trx
+				.selectFrom("lix_file")
+				.where("path", "=", "/AGENTS.md")
+				.select(["path"])
+				.executeTakeFirst();
 
-	if (exists) return;
+			if (exists) return;
 
-	const data = encoder.encode(agentsSeed);
-	await lix.db
-		.insertInto("file")
-		.values({ path: "/AGENTS.md", data })
-		.execute();
+			const data = encoder.encode(agentsSeed);
+			await trx
+				.insertInto("lix_file")
+				.values({ path: "/AGENTS.md", data })
+				.execute();
+		});
 }
 
-/**
- * Create a seeded Lix blob with AGENTS.md and an initial checkpoint.
- *
- * @example
- * const blob = await createSeededLixBlob();
- * await env.create({ blob: await blob.arrayBuffer() });
- */
-export async function createSeededLixBlob(): Promise<Blob> {
-	const seed = await newLixFile();
-	const lix = await openLix({
-		blob: seed,
-		providePluginsRaw: [mdPlugin],
-	});
+export async function seedStarterContent(lix: Lix): Promise<void> {
+	const allSeedDocs = [
+		{ path: "/AGENTS.md", content: agentsSeed },
+		...SEED_DOCS,
+	];
+	await qb(lix)
+		.transaction()
+		.execute(async (trx) => {
+			for (const doc of allSeedDocs) {
+				const exists = await trx
+					.selectFrom("lix_file")
+					.where("path", "=", doc.path)
+					.select(["path"])
+					.executeTakeFirst();
 
-	try {
-		await ensureAgentsFile(lix);
-		await createCheckpoint({ lix });
-		return await lix.toBlob();
-	} finally {
-		await lix.close();
-	}
+				if (exists) {
+					if (doc.path === "/AGENTS.md") {
+						continue;
+					}
+					await trx
+						.updateTable("lix_file")
+						.set({ data: encoder.encode(doc.content) })
+						.where("path", "=", doc.path)
+						.execute();
+					continue;
+				}
+
+				await trx
+					.insertInto("lix_file")
+					.values({ path: doc.path, data: encoder.encode(doc.content) })
+					.execute();
+			}
+		});
 }

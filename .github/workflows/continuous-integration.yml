@@ -32,6 +32,11 @@ jobs:
           node-version: ${{ matrix.version }}
           cache: "pnpm"
 
+      - name: Install Rust wasm tools
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo install wasm-bindgen-cli --version 0.2.108 --locked
+
       - name: Install dependencies
         run: pnpm install
 

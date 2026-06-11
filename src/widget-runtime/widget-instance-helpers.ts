@@ -1,0 +1,68 @@
+import type { DiffWidgetConfig, WidgetKind } from "./types";
+
+export const FILES_WIDGET_KIND = "flashtype_files" as WidgetKind;
+export const SEARCH_WIDGET_KIND = "flashtype_search" as WidgetKind;
+export const TASKS_WIDGET_KIND = "flashtype_tasks" as WidgetKind;
+export const FILE_WIDGET_KIND = "flashtype_file" as WidgetKind;
+export const DIFF_WIDGET_KIND = "flashtype_diff" as WidgetKind;
+export const TERMINAL_WIDGET_KIND = "flashtype_terminal" as WidgetKind;
+
+export const fileWidgetInstance = (fileId: string): string =>
+	`${FILE_WIDGET_KIND}:${fileId}`;
+
+export const diffWidgetInstance = (fileId: string): string =>
+	`${DIFF_WIDGET_KIND}:${fileId}`;
+
+export function decodeURIComponentSafe(value: string): string {
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		return value;
+	}
+}
+
+export function diffLabelFromPath(filePath?: string): string | undefined {
+	if (!filePath) return undefined;
+	const encodedLabel = filePath.split("/").filter(Boolean).pop();
+	return encodedLabel ? decodeURIComponentSafe(encodedLabel) : undefined;
+}
+
+export function fileLabelFromPath(
+	filePath?: string,
+	fallbackLabel?: string,
+): string {
+	const derived = diffLabelFromPath(filePath);
+	if (derived) return derived;
+	if (filePath) return filePath;
+	return fallbackLabel ?? "Untitled";
+}
+
+export function buildFileWidgetProps(args: {
+	fileId: string;
+	filePath?: string;
+	label?: string;
+}) {
+	const label = args.label ?? fileLabelFromPath(args.filePath, args.fileId);
+	return args.filePath
+		? {
+				fileId: args.fileId,
+				filePath: args.filePath,
+				flashtype: { label },
+			}
+		: { fileId: args.fileId, flashtype: { label } };
+}
+
+export function buildDiffWidgetProps(args: {
+	fileId: string;
+	filePath: string;
+	label?: string;
+	diffConfig?: DiffWidgetConfig;
+}) {
+	const label = args.label ?? diffLabelFromPath(args.filePath) ?? args.filePath;
+	return {
+		fileId: args.fileId,
+		filePath: args.filePath,
+		flashtype: { label },
+		...(args.diffConfig ? { diff: args.diffConfig } : {}),
+	};
+}

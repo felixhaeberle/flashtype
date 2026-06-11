@@ -1,5 +1,6 @@
-import type { Lix } from "@lix-js/sdk";
-import { useLix, useQuery } from "@lix-js/react-utils";
+import type { Lix } from "@/lib/lix-types";
+import { useLix, useQuery } from "@/lib/lix-react";
+import { qb } from "@/lib/lix-kysely";
 import {
 	type KeyDef,
 	type ValueOf,
@@ -23,7 +24,7 @@ const KVDefsContext = createContext<KVDefs | null>(null);
 /**
  * Provides key-value definitions to `useKeyValue` within a React subtree.
  *
- * Pass in a map of key definitions (version scope, tracking, defaults) so the
+ * Pass in a map of key definitions (branch scope, tracking, defaults) so the
  * hook can infer behavior for known keys.
  *
  * @example
@@ -51,7 +52,7 @@ export function KeyValueProvider({
  * Options passed to `useKeyValue` to override defaults for a specific key.
  */
 export type UseKeyValueOptions = {
-	defaultVersionId?: "active" | "global" | string;
+	defaultBranchId?: "active" | "global" | string;
 	untracked?: boolean;
 };
 
@@ -59,9 +60,24 @@ type OptimisticSlot = {
 	hasValue: boolean;
 	value: unknown;
 	listeners: Set<() => void>;
+	notifyScheduled?: boolean;
 };
 
 const OPTIMISTIC_SLOTS = new Map<string, OptimisticSlot>();
+
+function notifyOptimisticListeners(slot: OptimisticSlot): void {
+	if (slot.notifyScheduled) {
+		return;
+	}
+	slot.notifyScheduled = true;
+	queueMicrotask(() => {
+		slot.notifyScheduled = false;
+		const listeners = Array.from(slot.listeners);
+		for (const listener of listeners) {
+			listener();
+		}
+	});
+}
 
 function getOptimisticSlot(key: string): OptimisticSlot {
 	let slot = OPTIMISTIC_SLOTS.get(key);
@@ -85,21 +101,21 @@ function readOptimisticSnapshot(key: string): {
 
 function setOptimisticValue(key: string, value: unknown): void {
 	const slot = getOptimisticSlot(key);
+	if (slot.hasValue && valuesEqual(slot.value, value)) {
+		return;
+	}
 	slot.hasValue = true;
 	slot.value = value;
-	for (const listener of slot.listeners) {
-		listener();
-	}
+	notifyOptimisticListeners(slot);
 }
 
 function clearOptimisticValue(key: string): void {
 	const slot = OPTIMISTIC_SLOTS.get(key);
 	if (!slot) return;
+	if (!slot.hasValue) return;
 	slot.hasValue = false;
 	slot.value = undefined;
-	for (const listener of slot.listeners) {
-		listener();
-	}
+	notifyOptimisticListeners(slot);
 	if (slot.listeners.size === 0) {
 		OPTIMISTIC_SLOTS.delete(key);
 	}
@@ -120,13 +136,13 @@ function getDefaults(
 	key: string,
 	defs: Record<string, KeyDef<any>>,
 ): {
-	defaultVersionId: "active" | "global" | string;
+	defaultBranchId: "active" | "global" | string;
 	untracked: boolean;
 } {
 	const def = defs[key];
 	if (def) return def;
-	// Lix defaults: active version, tracked (untracked=false)
-	return { defaultVersionId: "active", untracked: false };
+	// Lix defaults: active branch, tracked (untracked=false)
+	return { defaultBranchId: "active", untracked: false };
 }
 
 // Overloads for strong typing on known keys
@@ -140,12 +156,10 @@ function getDefaults(
  * - Honors per-key defaults from `KeyValueProvider` or built-in schema.
  *
  * @example
- * function AutoAcceptToggle() {
- *   const [autoAccept, setAutoAccept] = useKeyValue('flashtype_auto_accept_session')
+ * function ActiveFileBadge() {
+ *   const [activeFileId] = useKeyValue('flashtype_active_file_id')
  *   return (
- *     <button onClick={() => setAutoAccept(!autoAccept)}>
- *       {autoAccept ? 'Enabled' : 'Disabled'}
- *     </button>
+ *     <span>{activeFileId ?? 'No active file'}</span>
  *   )
  * }
  */
@@ -153,6 +167,10 @@ export function useKeyValue<K extends KnownKey>(
 	key: K,
 	opts?: UseKeyValueOptions,
 ): readonly [ValueOf<K> | null, (newValue: ValueOf<K>) => Promise<void>];
+export function useKeyValue(
+	key: string,
+	opts?: UseKeyValueOptions,
+): readonly [unknown | null, (newValue: unknown) => Promise<void>];
 export function useKeyValue<K extends string>(
 	key: K,
 	opts?: UseKeyValueOptions,
@@ -161,13 +179,13 @@ export function useKeyValue<K extends string>(
 	const providedDefs =
 		useContext(KVDefsContext) ?? (KEY_VALUE_DEFINITIONS as KVDefs);
 	const d = getDefaults(key as string, providedDefs);
-	const defaultVersionId = opts?.defaultVersionId ?? d.defaultVersionId;
+	const defaultBranchId = opts?.defaultBranchId ?? d.defaultBranchId;
 	const untracked = opts?.untracked ?? d.untracked;
 
 	// Subscribe to live updates and suspend on first load via useQuery
-	const rows = useQuery(({ lix }) =>
+	const rows = useQuery<{ value: unknown }>((lix) =>
 		selectValue(lix, key as string, {
-			defaultVersionId: String(defaultVersionId),
+			defaultBranchId: String(defaultBranchId),
 			untracked,
 		}),
 	);
@@ -189,19 +207,29 @@ export function useKeyValue<K extends string>(
 
 	useEffect(() => {
 		const snapshot = readOptimisticSnapshot(key as string);
-		setOptimisticState({
+		const next = {
 			hasValue: snapshot.hasValue,
 			value: (snapshot.value ?? null) as ValueOf<K> | null,
-		});
+		};
+		setOptimisticState((prev) =>
+			prev.hasValue === next.hasValue && valuesEqual(prev.value, next.value)
+				? prev
+				: next,
+		);
 	}, [key]);
 
 	useEffect(() => {
 		const handle = () => {
 			const snapshot = readOptimisticSnapshot(key as string);
-			setOptimisticState({
+			const next = {
 				hasValue: snapshot.hasValue,
 				value: (snapshot.value ?? null) as ValueOf<K> | null,
-			});
+			};
+			setOptimisticState((prev) =>
+				prev.hasValue === next.hasValue && valuesEqual(prev.value, next.value)
+					? prev
+					: next,
+			);
 		};
 		return subscribeOptimistic(key as string, handle);
 	}, [key]);
@@ -217,11 +245,11 @@ export function useKeyValue<K extends string>(
 		async (newValue: ValueOf<K>) => {
 			setOptimisticValue(key as string, newValue as ValueOf<K> | null);
 			await upsertValue(lix, key as string, newValue as unknown, {
-				defaultVersionId: String(defaultVersionId),
+				defaultBranchId: String(defaultBranchId),
 				untracked,
 			});
 		},
-		[lix, key, defaultVersionId, untracked],
+		[lix, key, defaultBranchId, untracked],
 	);
 
 	const resolvedValue = optimistic.hasValue ? optimistic.value : value;
@@ -235,22 +263,18 @@ export function useKeyValue<K extends string>(
 function selectValue(
 	lix: Lix,
 	key: string,
-	opts: { defaultVersionId: string; untracked: boolean },
+	opts: { defaultBranchId: string; untracked: boolean },
 ) {
-	if (opts.untracked) {
-		const versionExpr =
-			opts.defaultVersionId === "active"
-				? lix.db.selectFrom("active_version").select("version_id")
-				: opts.defaultVersionId;
-		return lix.db
-			.selectFrom("key_value_by_version")
-			.where("lixcol_version_id", "=", versionExpr)
+	if (opts.defaultBranchId !== "active") {
+		return qb(lix)
+			.selectFrom("lix_key_value_by_branch")
+			.where("lixcol_branch_id", "=", opts.defaultBranchId)
 			.where("key", "=", key)
 			.select(["value"]);
 	}
-	// tracked (change-controlled) — supported on active version
-	return lix.db
-		.selectFrom("key_value")
+
+	return qb(lix)
+		.selectFrom("lix_key_value")
 		.where("key", "=", key)
 		.select(["value"]);
 }
@@ -259,66 +283,35 @@ async function upsertValue<T>(
 	lix: Lix,
 	key: string,
 	value: T,
-	opts: { defaultVersionId: string; untracked: boolean },
+	opts: { defaultBranchId: string; untracked: boolean },
 ) {
-	await lix.db.transaction().execute(async (trx) => {
-		if (opts.untracked) {
-			let versionId: string;
-			if (opts.defaultVersionId === "active") {
-				const row = await trx
-					.selectFrom("active_version")
-					.select("version_id")
-					.executeTakeFirstOrThrow();
-				versionId = row.version_id as unknown as string;
-			} else {
-				versionId = opts.defaultVersionId;
-			}
+	if (opts.defaultBranchId === "active") {
+		await qb(lix)
+			.insertInto("lix_key_value")
+			.values({
+				key,
+				value,
+				lixcol_untracked: opts.untracked,
+			})
+			.onConflict((oc) => oc.column("key").doUpdateSet({ value }))
+			.execute();
+		return;
+	}
 
-			const exists = await trx
-				.selectFrom("key_value_by_version")
-				.where("key", "=", key)
-				.where("lixcol_version_id", "=", versionId)
-				.select("key")
-				.executeTakeFirst();
-
-			if (exists) {
-				await trx
-					.updateTable("key_value_by_version")
-					.set({ value, lixcol_untracked: true })
-					.where("key", "=", key)
-					.where("lixcol_version_id", "=", versionId)
-					.execute();
-			} else {
-				await trx
-					.insertInto("key_value_by_version")
-					.values({
-						key,
-						value,
-						lixcol_version_id: versionId,
-						lixcol_untracked: true,
-					})
-					.execute();
-			}
-			return;
-		}
-
-		const trackedExists = await trx
-			.selectFrom("key_value")
-			.where("key", "=", key)
-			.select("key")
-			.executeTakeFirst();
-
-		if (trackedExists) {
-			await trx
-				.updateTable("key_value")
-				.set({ value })
-				.where("key", "=", key)
-				.execute();
-			return;
-		}
-
-		await trx.insertInto("key_value").values({ key, value }).execute();
-	});
+	const branchId = opts.defaultBranchId;
+	await qb(lix)
+		.insertInto("lix_key_value_by_branch")
+		.values({
+			key,
+			value,
+			lixcol_branch_id: branchId,
+			lixcol_global: branchId === "global",
+			lixcol_untracked: opts.untracked,
+		})
+		.onConflict((oc) =>
+			oc.columns(["key", "lixcol_branch_id"]).doUpdateSet({ value }),
+		)
+		.execute();
 }
 
 function valuesEqual(a: unknown, b: unknown): boolean {
