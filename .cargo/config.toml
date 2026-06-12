@@ -1,0 +1,4 @@
+[alias]
+# requires: cargo install cargo-bash
+b = "bash export FLASHTYPE_OLDPWD=$PWD && while ! [ -f \"$PWD/package.json\" -a -d \"$PWD/assets/icons/flashtype\" ]; do cd .. && [[ \"$PWD\" != \"/\" ]] || { echo \"not in flashtype repo\" && exit 1; }; done;"
+flashtype-icons = "b ./scripts/flashtype-icons.sh"

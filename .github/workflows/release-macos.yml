@@ -32,6 +32,7 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           cargo install wasm-bindgen-cli --version 0.2.108 --locked
+          cargo install cargo-bash --locked
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
