@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer, webUtils } from "electron";
 const workspace = {
 	get: () => ipcRenderer.invoke("workspace:get"),
 	open: (payload) => ipcRenderer.invoke("workspace:open", payload),
+	exportLixFile: () => ipcRenderer.invoke("workspace:exportLixFile"),
 	// Resolves the on-disk path of a File dropped onto the window.
 	getPathForFile: (file) => webUtils.getPathForFile(file),
 };
@@ -27,7 +28,6 @@ const lix = {
 	activeBranchId: () => ipcRenderer.invoke("lix:activeBranchId"),
 	createBranch: (payload) => ipcRenderer.invoke("lix:createBranch", payload),
 	switchBranch: (payload) => ipcRenderer.invoke("lix:switchBranch", payload),
-	exportSnapshot: () => ipcRenderer.invoke("lix:exportSnapshot"),
 	close: () => ipcRenderer.invoke("lix:close"),
 };
 

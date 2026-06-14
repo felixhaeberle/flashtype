@@ -249,11 +249,6 @@ export async function openDesktopLix(): Promise<Lix> {
 		return await runQueued(() => desktop.lix.switchBranch(options));
 	};
 
-	const exportSnapshot = async (): Promise<Uint8Array> => {
-		ensureOpen("exportSnapshot");
-		return await desktop.lix.exportSnapshot();
-	};
-
 	const close = async (): Promise<void> => {
 		if (closed) {
 			return;
@@ -279,7 +274,6 @@ export async function openDesktopLix(): Promise<Lix> {
 		activeBranchId,
 		createBranch,
 		switchBranch,
-		exportSnapshot,
 		close,
 	};
 	return lix satisfies Lix;

@@ -15,7 +15,6 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
-import { useLix } from "@/lib/lix-react";
 import { useCallback } from "react";
 import { useKeyValue } from "@/hooks/key-value/use-key-value";
 
@@ -26,7 +25,6 @@ import { useKeyValue } from "@/hooks/key-value/use-key-value";
  * <FlashtypeMenu />
  */
 export function FlashtypeMenu() {
-	const lix = useLix();
 	const [deterministicMode, setDeterministicMode] = useKeyValue(
 		"lix_deterministic_mode" as any,
 		{
@@ -45,10 +43,11 @@ export function FlashtypeMenu() {
 	}, [deterministicEnabled, setDeterministicMode]);
 
 	const handleExportLix = async () => {
-		if (!lix) return;
+		const workspace = window.flashtypeDesktop?.workspace;
+		if (!workspace) return;
 		try {
-			const snapshotBytes = await lix.exportSnapshot();
-			const blob = new Blob([new Uint8Array(snapshotBytes)], {
+			const lixFileBytes = await workspace.exportLixFile();
+			const blob = new Blob([new Uint8Array(lixFileBytes)], {
 				type: "application/octet-stream",
 			});
 			const url = URL.createObjectURL(blob);
@@ -64,7 +63,7 @@ export function FlashtypeMenu() {
 				URL.revokeObjectURL(url);
 			}, 100);
 		} catch (error) {
-			console.error("Failed to export Lix blob", error);
+			console.error("Failed to export Lix file", error);
 		}
 	};
 

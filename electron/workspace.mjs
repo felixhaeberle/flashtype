@@ -1,6 +1,6 @@
 import { dialog, ipcMain } from "electron";
 import path from "node:path";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 /**
  * The workspace is the folder Flashtype operates on. One window has at most
@@ -60,6 +60,13 @@ export async function openWorkspaceDialog(window) {
 	return await setWorkspaceFromPath(dir, window);
 }
 
+export async function exportWorkspaceLixFile() {
+	if (!workspace) {
+		throw new Error("No workspace is open. Open a folder before exporting lix.");
+	}
+	return await readFile(path.join(workspace.path, ".lix"));
+}
+
 export function applyWorkspaceWindowChrome(window) {
 	applyWindowChrome(window);
 }
@@ -90,5 +97,9 @@ export function registerWorkspaceIpc(getWindowForEvent) {
 			return await setWorkspaceFromPath(requestedPath, window);
 		}
 		return await openWorkspaceDialog(window);
+	});
+
+	ipcMain.handle("workspace:exportLixFile", async () => {
+		return await exportWorkspaceLixFile();
 	});
 }

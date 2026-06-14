@@ -1,5 +1,3 @@
-import path from "node:path";
-import { readFile } from "node:fs/promises";
 import { FsBackend, bundledPluginArchives, openLix } from "@lix-js/sdk";
 import { getWorkspace } from "./workspace.mjs";
 
@@ -179,9 +177,6 @@ function createDesktopLixHandle(nativeLix, workspaceDir) {
 				await ensureDefaultPluginsInstalledOnCurrentBranch(nativeLix);
 				return receipt;
 			});
-		},
-		async exportSnapshot() {
-			return await readFile(path.join(workspaceDir, ".lix"));
 		},
 		async close() {
 			await runQueued(() => nativeLix.close());

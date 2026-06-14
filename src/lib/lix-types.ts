@@ -91,7 +91,6 @@ export interface FlashtypeLix extends SdkLixBase {
 	observe(query: ObserveQuery): ObserveEvents;
 	mergeBranchPreview?: SdkLix["mergeBranchPreview"];
 	mergeBranch?: SdkLix["mergeBranch"];
-	exportSnapshot(): Promise<Uint8Array>;
 }
 
 export type Lix = FlashtypeLix;

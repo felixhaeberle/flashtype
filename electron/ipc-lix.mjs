@@ -257,11 +257,6 @@ export function registerLixIpc() {
 		});
 	});
 
-	ipcMain.handle("lix:exportSnapshot", async (event) => {
-		const lix = await ensureLixOpenForEvent(event);
-		return await lix.exportSnapshot();
-	});
-
 	ipcMain.handle("lix:close", async () => {
 		await closeAllHandles();
 		await closeLix();

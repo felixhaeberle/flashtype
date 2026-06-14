@@ -90,7 +90,6 @@ export type DesktopLixApi = {
 	switchBranch(payload: {
 		branchId: string;
 	}): Promise<DesktopSwitchBranchResult>;
-	exportSnapshot(): Promise<Uint8Array>;
 	close(): Promise<void>;
 };
 
@@ -140,6 +139,7 @@ export type DesktopWorkspaceApi = {
 	 * null when the picker is canceled.
 	 */
 	open(payload?: { path: string }): Promise<DesktopWorkspace | null>;
+	exportLixFile(): Promise<Uint8Array>;
 	getPathForFile(file: File): string;
 };
 

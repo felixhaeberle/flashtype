@@ -166,9 +166,6 @@ function createTestLixAdapter(sdkLix: SdkLix): Lix {
 		async mergeBranch(options) {
 			return await sdkLix.mergeBranch(options);
 		},
-		async exportSnapshot() {
-			return new Uint8Array();
-		},
 		async close() {
 			await sdkLix.close();
 		},
