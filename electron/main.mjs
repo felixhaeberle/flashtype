@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell } from "electron";
+import { app, BrowserWindow, dialog, Menu, shell } from "electron";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -15,6 +15,7 @@ import { captureAppOpened } from "./telemetry.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const execFileAsync = promisify(execFile);
+const APP_NAME = "Flashtype";
 const APP_BUNDLE_ID = "com.flashtype.app";
 const AUTO_UPDATE_CHECK_DELAY_MS = 10_000;
 const MARKDOWN_CONTENT_TYPES = [
@@ -24,6 +25,11 @@ const MARKDOWN_CONTENT_TYPES = [
 const DEV_SERVER_URL =
 	process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:4173";
 let mainWindow = null;
+let autoUpdaterInstance = null;
+let autoUpdateListenersRegistered = false;
+let updateCheckInProgress = false;
+
+app.setName(APP_NAME);
 
 app.on("open-file", (event, filePath) => {
 	event.preventDefault();
@@ -133,6 +139,7 @@ app.whenReady().then(async () => {
 	registerLixIpc();
 	registerTerminalIpc();
 	registerWorkspaceIpc((event) => BrowserWindow.fromWebContents(event.sender));
+	installApplicationMenu();
 	void registerMarkdownDefaultHandler();
 	void captureAppOpened();
 	const workspaceArgument = getWorkspacePathArgument(process.argv);
@@ -161,47 +168,145 @@ app.on("before-quit", () => {
 });
 
 async function setupAutoUpdates() {
-	if (!app.isPackaged || process.env.FLASHTYPE_DISABLE_AUTO_UPDATE === "1") {
+	if (!canUseAutoUpdates()) {
 		return;
 	}
 
 	try {
-		const { default: electronUpdater } = await import("electron-updater");
-		const { autoUpdater } = electronUpdater;
-
-		autoUpdater.autoDownload = true;
-
-		autoUpdater.on("error", (error) => {
-			console.warn("Failed to update Flashtype", error);
-		});
-
-		autoUpdater.on("update-downloaded", async () => {
-			const options = {
-				type: "info",
-				buttons: ["Restart", "Later"],
-				defaultId: 0,
-				cancelId: 1,
-				message: "An update is ready to install.",
-				detail: "Restart Flashtype to finish updating.",
-			};
-			const result =
-				mainWindow && !mainWindow.isDestroyed()
-					? await dialog.showMessageBox(mainWindow, options)
-					: await dialog.showMessageBox(options);
-
-			if (result.response === 0) {
-				autoUpdater.quitAndInstall();
-			}
-		});
+		const autoUpdater = await getAutoUpdater();
 
 		setTimeout(() => {
-			void autoUpdater.checkForUpdatesAndNotify().catch((error) => {
-				console.warn("Failed to check for Flashtype updates", error);
-			});
+			void checkForUpdates(autoUpdater);
 		}, AUTO_UPDATE_CHECK_DELAY_MS);
 	} catch (error) {
 		console.warn("Failed to initialize Flashtype auto updates", error);
 	}
+}
+
+function canUseAutoUpdates() {
+	return app.isPackaged && process.env.FLASHTYPE_DISABLE_AUTO_UPDATE !== "1";
+}
+
+async function getAutoUpdater() {
+	if (autoUpdaterInstance) {
+		return autoUpdaterInstance;
+	}
+
+	const { default: electronUpdater } = await import("electron-updater");
+	const { autoUpdater } = electronUpdater;
+	autoUpdater.autoDownload = true;
+	registerAutoUpdateListeners(autoUpdater);
+	autoUpdaterInstance = autoUpdater;
+	return autoUpdater;
+}
+
+function registerAutoUpdateListeners(autoUpdater) {
+	if (autoUpdateListenersRegistered) {
+		return;
+	}
+	autoUpdateListenersRegistered = true;
+
+	autoUpdater.on("error", (error) => {
+		console.warn("Failed to update Flashtype", error);
+	});
+
+	autoUpdater.on("update-downloaded", async () => {
+		const options = {
+			type: "info",
+			buttons: ["Restart", "Later"],
+			defaultId: 0,
+			cancelId: 1,
+			message: "An update is ready to install.",
+			detail: "Restart Flashtype to finish updating.",
+		};
+		const result =
+			mainWindow && !mainWindow.isDestroyed()
+				? await dialog.showMessageBox(mainWindow, options)
+				: await dialog.showMessageBox(options);
+
+		if (result.response === 0) {
+			autoUpdater.quitAndInstall();
+		}
+	});
+}
+
+async function checkForUpdates(autoUpdater) {
+	if (updateCheckInProgress) {
+		return;
+	}
+	updateCheckInProgress = true;
+	installApplicationMenu();
+	try {
+		await autoUpdater.checkForUpdatesAndNotify();
+	} catch (error) {
+		console.warn("Failed to check for Flashtype updates", error);
+	} finally {
+		updateCheckInProgress = false;
+		installApplicationMenu();
+	}
+}
+
+async function checkForUpdatesFromMenu() {
+	if (!canUseAutoUpdates()) {
+		return;
+	}
+
+	try {
+		const autoUpdater = await getAutoUpdater();
+		await checkForUpdates(autoUpdater);
+	} catch (error) {
+		console.warn("Failed to check for Flashtype updates", error);
+	}
+}
+
+function installApplicationMenu() {
+	const checkForUpdatesItem = {
+		label: updateCheckInProgress ? "Checking for Updates..." : "Check for Updates...",
+		enabled: canUseAutoUpdates() && !updateCheckInProgress,
+		click: () => {
+			void checkForUpdatesFromMenu();
+		},
+	};
+
+	if (process.platform === "darwin") {
+		Menu.setApplicationMenu(
+			Menu.buildFromTemplate([
+				{
+					label: APP_NAME,
+					submenu: [
+						{ label: `About ${APP_NAME}`, role: "about" },
+						checkForUpdatesItem,
+						{ type: "separator" },
+						{ role: "services" },
+						{ type: "separator" },
+						{ label: `Hide ${APP_NAME}`, role: "hide" },
+						{ role: "hideOthers" },
+						{ role: "unhide" },
+						{ type: "separator" },
+						{ label: `Quit ${APP_NAME}`, role: "quit" },
+					],
+				},
+				{ role: "fileMenu" },
+				{ role: "editMenu" },
+				{ role: "viewMenu" },
+				{ role: "windowMenu" },
+			]),
+		);
+		return;
+	}
+
+	Menu.setApplicationMenu(
+		Menu.buildFromTemplate([
+			{ role: "fileMenu" },
+			{ role: "editMenu" },
+			{ role: "viewMenu" },
+			{ role: "windowMenu" },
+			{
+				role: "help",
+				submenu: [checkForUpdatesItem],
+			},
+		]),
+	);
 }
 
 async function registerMarkdownDefaultHandler() {
