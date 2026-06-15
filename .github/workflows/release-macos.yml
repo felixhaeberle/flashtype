@@ -112,23 +112,6 @@ jobs:
           POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
         run: pnpm run package:mac
 
-      - name: Notarize macOS DMG
-        run: |
-          dmg_files=(release/*.dmg)
-          if [ ! -e "${dmg_files[0]}" ]; then
-            echo "No DMG files found in release/."
-            exit 1
-          fi
-
-          for dmg in "${dmg_files[@]}"; do
-            xcrun notarytool submit "$dmg" \
-              --key "$APPLE_API_KEY" \
-              --key-id "$APPLE_API_KEY_ID" \
-              --issuer "$APPLE_API_ISSUER" \
-              --wait
-            xcrun stapler staple "$dmg"
-          done
-
       - name: Verify macOS app signature (diagnostic)
         run: codesign --verify --deep --strict --verbose=2 release/mac-arm64/Flashtype.app
 
@@ -136,10 +119,6 @@ jobs:
         run: |
           xcrun stapler validate release/mac-arm64/Flashtype.app
           spctl --assess --verbose --type exec release/mac-arm64/Flashtype.app
-          for dmg in release/*.dmg; do
-            xcrun stapler validate "$dmg"
-            spctl --assess --verbose --type open --context context:primary-signature "$dmg"
-          done
 
       - name: Test packaged macOS app
         run: pnpm run test:e2e:packaged-macos

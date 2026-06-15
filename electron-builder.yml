@@ -73,7 +73,6 @@ mac:
             - text/x-markdown
 dmg:
   icon: build/icon.icns
-  sign: true
   contents:
     - x: 130
       y: 220

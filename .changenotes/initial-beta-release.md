@@ -1,5 +1,5 @@
 ---
-type: minor
+type: patch
 ---
 
 Added the initial FlashType beta release.
