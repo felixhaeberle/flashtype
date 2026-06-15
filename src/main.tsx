@@ -54,6 +54,10 @@ export const AppRoot = () => {
 	}, [workspace]);
 
 	const openFolderInFlightRef = useRef(false);
+	const handleCheckForUpdates = useCallback(async () => {
+		await window.flashtypeDesktop?.app?.checkForUpdates();
+	}, []);
+
 	const handleOpenFolder = useCallback(
 		async (path?: string) => {
 			const desktop = window.flashtypeDesktop;
@@ -122,7 +126,12 @@ export const AppRoot = () => {
 	if (error) return <ErrorFallback error={error} />;
 	if (workspace === undefined) return <BootPlaceholder />;
 	if (workspace === null)
-		return <FirstRunScreen onOpenFolder={handleOpenFolder} />;
+		return (
+			<FirstRunScreen
+				onOpenFolder={handleOpenFolder}
+				onCheckForUpdates={handleCheckForUpdates}
+			/>
+		);
 	if (!lix) return <BootPlaceholder />;
 
 	return (
@@ -132,6 +141,7 @@ export const AppRoot = () => {
 					<V2LayoutShell
 						workspaceName={workspace.name}
 						onOpenWorkspace={handleOpenFolder}
+						onCheckForUpdates={handleCheckForUpdates}
 					/>
 				</Suspense>
 			</KeyValueProvider>

@@ -144,9 +144,20 @@ export type DesktopWorkspaceApi = {
 	getPathForFile(file: File): string;
 };
 
+export type DesktopUpdateCheckStatus =
+	| "started"
+	| "busy"
+	| "disabled"
+	| "error";
+
+export type DesktopAppApi = {
+	checkForUpdates(): Promise<{ status: DesktopUpdateCheckStatus }>;
+};
+
 declare global {
 	interface Window {
 		flashtypeDesktop?: {
+			app: DesktopAppApi;
 			platform: string;
 			lix: DesktopLixApi;
 			terminal: DesktopTerminalApi;

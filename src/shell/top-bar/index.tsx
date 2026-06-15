@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Folder } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ export type TopBarProps = {
 	readonly onToggleRightSidebar?: () => void;
 	readonly isLeftSidebarVisible?: boolean;
 	readonly isRightSidebarVisible?: boolean;
+	readonly onCheckForUpdates?: () => void | Promise<void>;
 };
 
 /**
@@ -36,7 +37,9 @@ export function TopBar({
 	onToggleRightSidebar,
 	isLeftSidebarVisible = true,
 	isRightSidebarVisible = true,
+	onCheckForUpdates,
 }: TopBarProps) {
+	const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
 	const isMacPlatform = useMemo(() => {
 		if (typeof navigator === "undefined") return false;
 		const platformCandidates = [
@@ -52,6 +55,17 @@ export function TopBar({
 	const modifierKey = isMacPlatform ? "⌘" : "Ctrl";
 	const leftShortcut = isMacPlatform ? `${modifierKey}1` : `${modifierKey}+1`;
 	const rightShortcut = isMacPlatform ? `${modifierKey}3` : `${modifierKey}+3`;
+	const showUpdateButton = Boolean(onCheckForUpdates);
+
+	const handleCheckForUpdates = async () => {
+		if (!onCheckForUpdates || isCheckingForUpdates) return;
+		setIsCheckingForUpdates(true);
+		try {
+			await onCheckForUpdates();
+		} finally {
+			setIsCheckingForUpdates(false);
+		}
+	};
 
 	return (
 		<header className="relative flex h-9 shrink-0 items-center px-3 text-ink-muted [-webkit-app-region:drag]">
@@ -114,7 +128,20 @@ export function TopBar({
 					</button>
 				</div>
 			) : null}
-			<div className="flex flex-1 items-center justify-end gap-0.5">
+			<div className="flex flex-1 items-center justify-end gap-1.5">
+				{showUpdateButton ? (
+					<Button
+						type="button"
+						className="h-6 rounded-md bg-linear-to-b from-brand-500 to-brand-600 px-2.5 text-[11.5px] font-bold text-neutral-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_1px_2px_rgba(123,62,27,0.16)] hover:brightness-[1.06] [-webkit-app-region:no-drag]"
+						disabled={isCheckingForUpdates}
+						onClick={() => {
+							void handleCheckForUpdates();
+						}}
+						aria-label="Check for updates"
+					>
+						Update
+					</Button>
+				) : null}
 				<Button
 					variant="ghost"
 					size="icon"

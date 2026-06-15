@@ -1,5 +1,9 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 
+const app = {
+	checkForUpdates: () => ipcRenderer.invoke("app:checkForUpdates"),
+};
+
 const workspace = {
 	get: () => ipcRenderer.invoke("workspace:get"),
 	open: (payload) => ipcRenderer.invoke("workspace:open", payload),
@@ -54,6 +58,7 @@ const terminal = {
 };
 
 contextBridge.exposeInMainWorld("flashtypeDesktop", {
+	app,
 	platform: process.platform,
 	lix,
 	terminal,

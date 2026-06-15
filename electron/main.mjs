@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -138,6 +138,7 @@ function createMainWindow() {
 app.whenReady().then(async () => {
 	registerLixIpc();
 	registerTerminalIpc();
+	registerAppIpc();
 	registerWorkspaceIpc((event) => BrowserWindow.fromWebContents(event.sender));
 	installApplicationMenu();
 	void registerMarkdownDefaultHandler();
@@ -187,6 +188,12 @@ function canUseAutoUpdates() {
 	return app.isPackaged && process.env.FLASHTYPE_DISABLE_AUTO_UPDATE !== "1";
 }
 
+function registerAppIpc() {
+	ipcMain.handle("app:checkForUpdates", async () => {
+		return await checkForUpdatesFromMenu();
+	});
+}
+
 async function getAutoUpdater() {
 	if (autoUpdaterInstance) {
 		return autoUpdaterInstance;
@@ -232,14 +239,16 @@ function registerAutoUpdateListeners(autoUpdater) {
 
 async function checkForUpdates(autoUpdater) {
 	if (updateCheckInProgress) {
-		return;
+		return { status: "busy" };
 	}
 	updateCheckInProgress = true;
 	installApplicationMenu();
 	try {
 		await autoUpdater.checkForUpdatesAndNotify();
+		return { status: "started" };
 	} catch (error) {
 		console.warn("Failed to check for Flashtype updates", error);
+		return { status: "error" };
 	} finally {
 		updateCheckInProgress = false;
 		installApplicationMenu();
@@ -248,20 +257,23 @@ async function checkForUpdates(autoUpdater) {
 
 async function checkForUpdatesFromMenu() {
 	if (!canUseAutoUpdates()) {
-		return;
+		return { status: "disabled" };
 	}
 
 	try {
 		const autoUpdater = await getAutoUpdater();
-		await checkForUpdates(autoUpdater);
+		return await checkForUpdates(autoUpdater);
 	} catch (error) {
 		console.warn("Failed to check for Flashtype updates", error);
+		return { status: "error" };
 	}
 }
 
 function installApplicationMenu() {
 	const checkForUpdatesItem = {
-		label: updateCheckInProgress ? "Checking for Updates..." : "Check for Updates...",
+		label: updateCheckInProgress
+			? "Checking for Updates..."
+			: "Check for Updates...",
 		enabled: canUseAutoUpdates() && !updateCheckInProgress,
 		click: () => {
 			void checkForUpdatesFromMenu();

@@ -1,7 +1,6 @@
 import { useCallback, useState, type JSX } from "react";
 import { Files, Zap } from "lucide-react";
 import { TopBar } from "./top-bar";
-import { StatusBar } from "./status-bar";
 import { AddViewButton, Island, IslandTabRow, TabChip } from "./island";
 import { AgentInvite } from "./agent-invite";
 
@@ -16,9 +15,11 @@ import { AgentInvite } from "./agent-invite";
  */
 export function FirstRunScreen({
 	onOpenFolder,
+	onCheckForUpdates,
 }: {
 	/** Called with a path for dropped folders, without one for the picker. */
 	readonly onOpenFolder: (path?: string) => Promise<void>;
+	readonly onCheckForUpdates?: () => void | Promise<void>;
 }): JSX.Element {
 	const [isDropTarget, setIsDropTarget] = useState(false);
 
@@ -54,6 +55,7 @@ export function FirstRunScreen({
 						<Zap className="size-3.75 fill-brand-600 text-brand-600" />
 					</span>
 				}
+				onCheckForUpdates={onCheckForUpdates}
 			/>
 			<div className="flex min-h-0 flex-1 gap-1.75 px-2">
 				<Island className="flex-20">
@@ -101,7 +103,6 @@ export function FirstRunScreen({
 					<AgentInvite />
 				</Island>
 			</div>
-			<StatusBar left={<span>Ready</span>} />
 		</div>
 	);
 }

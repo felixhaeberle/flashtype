@@ -1,8 +1,8 @@
 import type { JSX, ReactNode } from "react";
 
 /**
- * Bottom status ribbon. Left carries workspace status (git branch, or
- * "Ready" on first run); right carries document info.
+ * Bottom status ribbon. Left carries workspace status and right carries
+ * document info.
  *
  * @example
  * <StatusBar left={<BranchSwitcher />} right={<span>1,240 words</span>} />

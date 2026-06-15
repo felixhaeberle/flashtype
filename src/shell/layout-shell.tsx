@@ -266,9 +266,11 @@ async function resolveNextUntitledMarkdownPath(
 export function V2LayoutShell({
 	workspaceName,
 	onOpenWorkspace,
+	onCheckForUpdates,
 }: {
 	readonly workspaceName?: string;
 	readonly onOpenWorkspace?: () => void;
+	readonly onCheckForUpdates?: () => void | Promise<void>;
 }) {
 	return (
 		<WidgetRegistryProvider>
@@ -276,6 +278,7 @@ export function V2LayoutShell({
 				<LayoutShellContent
 					workspaceName={workspaceName}
 					onOpenWorkspace={onOpenWorkspace}
+					onCheckForUpdates={onCheckForUpdates}
 				/>
 			</WidgetHostRegistryProvider>
 		</WidgetRegistryProvider>
@@ -291,9 +294,11 @@ export function V2LayoutShell({
 function LayoutShellContent({
 	workspaceName,
 	onOpenWorkspace,
+	onCheckForUpdates,
 }: {
 	readonly workspaceName?: string;
 	readonly onOpenWorkspace?: () => void;
+	readonly onCheckForUpdates?: () => void | Promise<void>;
 }) {
 	const { widgetMap, replaceInstalledWidgets, clearInstalledWidgets } =
 		useWidgetRegistry();
@@ -1456,6 +1461,7 @@ function LayoutShellContent({
 					onToggleRightSidebar={toggleRightSidebar}
 					isLeftSidebarVisible={!isLeftCollapsed}
 					isRightSidebarVisible={!isRightCollapsed}
+					onCheckForUpdates={onCheckForUpdates}
 				/>
 				<div className="flex flex-1 min-h-0 overflow-hidden px-2">
 					<PanelGroup direction="horizontal" onLayout={handleLayoutChange}>
@@ -1496,7 +1502,7 @@ function LayoutShellContent({
 								onFocusPanel={focusPanel}
 								onSelectWidget={handleSelectCentralView}
 								onRemoveWidget={(key) => handleRemoveView("central", key)}
-									onFinalizePendingView={(key) =>
+								onFinalizePendingView={(key) =>
 									setPanelState(
 										"central",
 										(panel) => activatePanelWidget(panel, key),
