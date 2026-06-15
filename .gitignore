@@ -16,3 +16,5 @@ node_modules/
 /.pnpm-store/
 /test-results/
 /public/sqlite3.wasm
+
+/target/
