@@ -16,7 +16,6 @@ jobs:
         os: [blacksmith-8vcpu-ubuntu-2404]
         version: [22]
     runs-on: ${{ matrix.os }}
-    environment: staging
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
