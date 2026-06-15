@@ -2,6 +2,15 @@ import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 const app = {
 	checkForUpdates: () => ipcRenderer.invoke("app:checkForUpdates"),
+	getUpdateState: () => ipcRenderer.invoke("app:getUpdateState"),
+	installUpdate: () => ipcRenderer.invoke("app:installUpdate"),
+	onUpdateState: (listener) => {
+		const wrapped = (_event, payload) => listener(payload);
+		ipcRenderer.on("app:updateState", wrapped);
+		return () => {
+			ipcRenderer.off("app:updateState", wrapped);
+		};
+	},
 };
 
 const workspace = {

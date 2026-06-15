@@ -15,11 +15,13 @@ import { AgentInvite } from "./agent-invite";
  */
 export function FirstRunScreen({
 	onOpenFolder,
-	onCheckForUpdates,
+	isUpdateReady,
+	onInstallUpdate,
 }: {
 	/** Called with a path for dropped folders, without one for the picker. */
 	readonly onOpenFolder: (path?: string) => Promise<void>;
-	readonly onCheckForUpdates?: () => void | Promise<void>;
+	readonly isUpdateReady?: boolean;
+	readonly onInstallUpdate?: () => void | Promise<void>;
 }): JSX.Element {
 	const [isDropTarget, setIsDropTarget] = useState(false);
 
@@ -55,7 +57,8 @@ export function FirstRunScreen({
 						<Zap className="size-3.75 fill-brand-600 text-brand-600" />
 					</span>
 				}
-				onCheckForUpdates={onCheckForUpdates}
+				isUpdateReady={isUpdateReady}
+				onInstallUpdate={onInstallUpdate}
 			/>
 			<div className="flex min-h-0 flex-1 gap-1.75 px-2">
 				<Island className="flex-20">

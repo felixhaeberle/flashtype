@@ -44,6 +44,7 @@ mac:
     - from: build/markdown.icns
       to: markdown.icns
   extendInfo:
+    NSHumanReadableCopyright: Copyright © 2026 Opral US Inc.
     CFBundleDocumentTypes:
       - CFBundleTypeName: Markdown Document
         CFBundleTypeRole: Editor

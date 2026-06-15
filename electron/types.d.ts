@@ -148,10 +148,20 @@ export type DesktopUpdateCheckStatus =
 	| "started"
 	| "busy"
 	| "disabled"
-	| "error";
+	| "error"
+	| "installing"
+	| "not-ready";
+
+export type DesktopUpdateState = {
+	checking: boolean;
+	updateReady: boolean;
+};
 
 export type DesktopAppApi = {
 	checkForUpdates(): Promise<{ status: DesktopUpdateCheckStatus }>;
+	getUpdateState(): Promise<DesktopUpdateState>;
+	installUpdate(): Promise<{ status: DesktopUpdateCheckStatus }>;
+	onUpdateState(listener: (state: DesktopUpdateState) => void): () => void;
 };
 
 declare global {

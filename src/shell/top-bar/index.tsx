@@ -18,7 +18,8 @@ export type TopBarProps = {
 	readonly onToggleRightSidebar?: () => void;
 	readonly isLeftSidebarVisible?: boolean;
 	readonly isRightSidebarVisible?: boolean;
-	readonly onCheckForUpdates?: () => void | Promise<void>;
+	readonly isUpdateReady?: boolean;
+	readonly onInstallUpdate?: () => void | Promise<void>;
 };
 
 /**
@@ -37,9 +38,10 @@ export function TopBar({
 	onToggleRightSidebar,
 	isLeftSidebarVisible = true,
 	isRightSidebarVisible = true,
-	onCheckForUpdates,
+	isUpdateReady = false,
+	onInstallUpdate,
 }: TopBarProps) {
-	const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
+	const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
 	const isMacPlatform = useMemo(() => {
 		if (typeof navigator === "undefined") return false;
 		const platformCandidates = [
@@ -55,15 +57,15 @@ export function TopBar({
 	const modifierKey = isMacPlatform ? "⌘" : "Ctrl";
 	const leftShortcut = isMacPlatform ? `${modifierKey}1` : `${modifierKey}+1`;
 	const rightShortcut = isMacPlatform ? `${modifierKey}3` : `${modifierKey}+3`;
-	const showUpdateButton = Boolean(onCheckForUpdates);
+	const showUpdateButton = isUpdateReady && Boolean(onInstallUpdate);
 
-	const handleCheckForUpdates = async () => {
-		if (!onCheckForUpdates || isCheckingForUpdates) return;
-		setIsCheckingForUpdates(true);
+	const handleInstallUpdate = async () => {
+		if (!onInstallUpdate || isInstallingUpdate) return;
+		setIsInstallingUpdate(true);
 		try {
-			await onCheckForUpdates();
+			await onInstallUpdate();
 		} finally {
-			setIsCheckingForUpdates(false);
+			setIsInstallingUpdate(false);
 		}
 	};
 
@@ -133,11 +135,11 @@ export function TopBar({
 					<Button
 						type="button"
 						className="h-6 rounded-md bg-linear-to-b from-brand-500 to-brand-600 px-2.5 text-[11.5px] font-bold text-neutral-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_1px_2px_rgba(123,62,27,0.16)] hover:brightness-[1.06] [-webkit-app-region:no-drag]"
-						disabled={isCheckingForUpdates}
+						disabled={isInstallingUpdate}
 						onClick={() => {
-							void handleCheckForUpdates();
+							void handleInstallUpdate();
 						}}
-						aria-label="Check for updates"
+						aria-label="Install update"
 					>
 						Update
 					</Button>

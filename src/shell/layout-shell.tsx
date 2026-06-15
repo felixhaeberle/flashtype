@@ -266,11 +266,13 @@ async function resolveNextUntitledMarkdownPath(
 export function V2LayoutShell({
 	workspaceName,
 	onOpenWorkspace,
-	onCheckForUpdates,
+	isUpdateReady,
+	onInstallUpdate,
 }: {
 	readonly workspaceName?: string;
 	readonly onOpenWorkspace?: () => void;
-	readonly onCheckForUpdates?: () => void | Promise<void>;
+	readonly isUpdateReady?: boolean;
+	readonly onInstallUpdate?: () => void | Promise<void>;
 }) {
 	return (
 		<WidgetRegistryProvider>
@@ -278,7 +280,8 @@ export function V2LayoutShell({
 				<LayoutShellContent
 					workspaceName={workspaceName}
 					onOpenWorkspace={onOpenWorkspace}
-					onCheckForUpdates={onCheckForUpdates}
+					isUpdateReady={isUpdateReady}
+					onInstallUpdate={onInstallUpdate}
 				/>
 			</WidgetHostRegistryProvider>
 		</WidgetRegistryProvider>
@@ -294,11 +297,13 @@ export function V2LayoutShell({
 function LayoutShellContent({
 	workspaceName,
 	onOpenWorkspace,
-	onCheckForUpdates,
+	isUpdateReady,
+	onInstallUpdate,
 }: {
 	readonly workspaceName?: string;
 	readonly onOpenWorkspace?: () => void;
-	readonly onCheckForUpdates?: () => void | Promise<void>;
+	readonly isUpdateReady?: boolean;
+	readonly onInstallUpdate?: () => void | Promise<void>;
 }) {
 	const { widgetMap, replaceInstalledWidgets, clearInstalledWidgets } =
 		useWidgetRegistry();
@@ -1461,7 +1466,8 @@ function LayoutShellContent({
 					onToggleRightSidebar={toggleRightSidebar}
 					isLeftSidebarVisible={!isLeftCollapsed}
 					isRightSidebarVisible={!isRightCollapsed}
-					onCheckForUpdates={onCheckForUpdates}
+					isUpdateReady={isUpdateReady}
+					onInstallUpdate={onInstallUpdate}
 				/>
 				<div className="flex flex-1 min-h-0 overflow-hidden px-2">
 					<PanelGroup direction="horizontal" onLayout={handleLayoutChange}>

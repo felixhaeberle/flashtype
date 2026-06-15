@@ -30,6 +30,7 @@ export const AppRoot = () => {
 	const [workspace, setWorkspace] = useState<Workspace | undefined>(undefined);
 	const [lix, setLix] = useState<Lix | null>(null);
 	const [error, setError] = useState<unknown>(null);
+	const [isUpdateReady, setIsUpdateReady] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -54,8 +55,26 @@ export const AppRoot = () => {
 	}, [workspace]);
 
 	const openFolderInFlightRef = useRef(false);
-	const handleCheckForUpdates = useCallback(async () => {
-		await window.flashtypeDesktop?.app?.checkForUpdates();
+	const handleInstallUpdate = useCallback(async () => {
+		await window.flashtypeDesktop?.app?.installUpdate();
+	}, []);
+
+	useEffect(() => {
+		const desktopApp = window.flashtypeDesktop?.app;
+		if (!desktopApp) return;
+
+		let cancelled = false;
+		void desktopApp.getUpdateState().then((state) => {
+			if (!cancelled) setIsUpdateReady(state.updateReady);
+		});
+
+		const unsubscribe = desktopApp.onUpdateState((state) => {
+			setIsUpdateReady(state.updateReady);
+		});
+		return () => {
+			cancelled = true;
+			unsubscribe();
+		};
 	}, []);
 
 	const handleOpenFolder = useCallback(
@@ -129,7 +148,8 @@ export const AppRoot = () => {
 		return (
 			<FirstRunScreen
 				onOpenFolder={handleOpenFolder}
-				onCheckForUpdates={handleCheckForUpdates}
+				isUpdateReady={isUpdateReady}
+				onInstallUpdate={handleInstallUpdate}
 			/>
 		);
 	if (!lix) return <BootPlaceholder />;
@@ -141,7 +161,8 @@ export const AppRoot = () => {
 					<V2LayoutShell
 						workspaceName={workspace.name}
 						onOpenWorkspace={handleOpenFolder}
-						onCheckForUpdates={handleCheckForUpdates}
+						isUpdateReady={isUpdateReady}
+						onInstallUpdate={handleInstallUpdate}
 					/>
 				</Suspense>
 			</KeyValueProvider>

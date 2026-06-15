@@ -28,8 +28,14 @@ let mainWindow = null;
 let autoUpdaterInstance = null;
 let autoUpdateListenersRegistered = false;
 let updateCheckInProgress = false;
+let updateInstallReady = false;
+let pendingManualUpdateCheck = false;
 
 app.setName(APP_NAME);
+app.setAboutPanelOptions({
+	applicationName: APP_NAME,
+	copyright: "Copyright © 2026 Opral US Inc.",
+});
 
 app.on("open-file", (event, filePath) => {
 	event.preventDefault();
@@ -190,7 +196,17 @@ function canUseAutoUpdates() {
 
 function registerAppIpc() {
 	ipcMain.handle("app:checkForUpdates", async () => {
-		return await checkForUpdatesFromMenu();
+		return await checkForUpdatesFromMenu({ manual: true });
+	});
+	ipcMain.handle("app:getUpdateState", () => {
+		return getUpdateState();
+	});
+	ipcMain.handle("app:installUpdate", async () => {
+		if (!updateInstallReady || !autoUpdaterInstance) {
+			return { status: "not-ready" };
+		}
+		autoUpdaterInstance.quitAndInstall();
+		return { status: "installing" };
 	});
 }
 
@@ -213,11 +229,54 @@ function registerAutoUpdateListeners(autoUpdater) {
 	}
 	autoUpdateListenersRegistered = true;
 
+	autoUpdater.on("checking-for-update", () => {
+		updateCheckInProgress = true;
+		installApplicationMenu();
+		broadcastUpdateState();
+	});
+
+	autoUpdater.on("update-available", () => {
+		updateCheckInProgress = false;
+		installApplicationMenu();
+		broadcastUpdateState();
+	});
+
+	autoUpdater.on("update-not-available", async () => {
+		updateCheckInProgress = false;
+		installApplicationMenu();
+		broadcastUpdateState();
+
+		if (pendingManualUpdateCheck) {
+			pendingManualUpdateCheck = false;
+			const options = {
+				type: "info",
+				buttons: ["OK"],
+				message: "Flashtype is up to date.",
+				detail: `Version ${app.getVersion()} is the latest version available.`,
+			};
+			if (mainWindow && !mainWindow.isDestroyed()) {
+				await dialog.showMessageBox(mainWindow, options);
+			} else {
+				await dialog.showMessageBox(options);
+			}
+		}
+	});
+
 	autoUpdater.on("error", (error) => {
+		updateCheckInProgress = false;
+		pendingManualUpdateCheck = false;
+		installApplicationMenu();
+		broadcastUpdateState();
 		console.warn("Failed to update Flashtype", error);
 	});
 
 	autoUpdater.on("update-downloaded", async () => {
+		updateInstallReady = true;
+		updateCheckInProgress = false;
+		pendingManualUpdateCheck = false;
+		installApplicationMenu();
+		broadcastUpdateState();
+
 		const options = {
 			type: "info",
 			buttons: ["Restart", "Later"],
@@ -237,12 +296,30 @@ function registerAutoUpdateListeners(autoUpdater) {
 	});
 }
 
-async function checkForUpdates(autoUpdater) {
+function getUpdateState() {
+	return {
+		checking: updateCheckInProgress,
+		updateReady: updateInstallReady,
+	};
+}
+
+function broadcastUpdateState() {
+	const state = getUpdateState();
+	for (const window of BrowserWindow.getAllWindows()) {
+		if (!window.isDestroyed()) {
+			window.webContents.send("app:updateState", state);
+		}
+	}
+}
+
+async function checkForUpdates(autoUpdater, { manual = false } = {}) {
 	if (updateCheckInProgress) {
 		return { status: "busy" };
 	}
+	pendingManualUpdateCheck = manual;
 	updateCheckInProgress = true;
 	installApplicationMenu();
+	broadcastUpdateState();
 	try {
 		await autoUpdater.checkForUpdatesAndNotify();
 		return { status: "started" };
@@ -250,20 +327,24 @@ async function checkForUpdates(autoUpdater) {
 		console.warn("Failed to check for Flashtype updates", error);
 		return { status: "error" };
 	} finally {
-		updateCheckInProgress = false;
+		if (updateCheckInProgress) {
+			updateCheckInProgress = false;
+		}
 		installApplicationMenu();
+		broadcastUpdateState();
 	}
 }
 
-async function checkForUpdatesFromMenu() {
+async function checkForUpdatesFromMenu(options = {}) {
 	if (!canUseAutoUpdates()) {
 		return { status: "disabled" };
 	}
 
 	try {
 		const autoUpdater = await getAutoUpdater();
-		return await checkForUpdates(autoUpdater);
+		return await checkForUpdates(autoUpdater, options);
 	} catch (error) {
+		pendingManualUpdateCheck = false;
 		console.warn("Failed to check for Flashtype updates", error);
 		return { status: "error" };
 	}
@@ -276,7 +357,7 @@ function installApplicationMenu() {
 			: "Check for Updates...",
 		enabled: canUseAutoUpdates() && !updateCheckInProgress,
 		click: () => {
-			void checkForUpdatesFromMenu();
+			void checkForUpdatesFromMenu({ manual: true });
 		},
 	};
 
