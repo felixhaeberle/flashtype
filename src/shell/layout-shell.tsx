@@ -288,6 +288,21 @@ export function V2LayoutShell({
 	);
 }
 
+function isPanelShortcutBlockedTarget(target: EventTarget | null): boolean {
+	if (!target || !(target instanceof HTMLElement)) {
+		return false;
+	}
+	if (target.closest(".ProseMirror")) {
+		return false;
+	}
+	if (target.isContentEditable) return true;
+	const tagName = target.tagName;
+	if (tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT") {
+		return true;
+	}
+	return Boolean(target.closest("input, textarea, select, [contenteditable]"));
+}
+
 /**
  * App layout shell with independent left and right islands.
  *
@@ -1018,11 +1033,12 @@ function LayoutShellContent({
 		void setActiveFileId(activeCentralFileId);
 	}, [activeCentralFileId, activeFileId, setActiveFileId]);
 
-	const activeStatusLabel = useMemo(() => {
+	const activeFileName = useMemo(() => {
 		if (!activeCentralEntry) return null;
 		const rawPath = activeCentralEntry.state?.filePath as string | undefined;
 		if (rawPath) {
-			return rawPath;
+			const segments = rawPath.split("/").filter(Boolean);
+			return segments[segments.length - 1] ?? rawPath;
 		}
 		return (
 			(activeCentralEntry.state?.flashtype?.label as string | undefined) ??
@@ -1351,26 +1367,13 @@ function LayoutShellContent({
 		return /mac|iphone|ipad|ipod/.test(combined);
 	}, []);
 
-	const isInteractiveTarget = useCallback(
-		(target: EventTarget | null): boolean => {
-			if (!target || !(target instanceof HTMLElement)) return false;
-			const tagName = target.tagName.toLowerCase();
-			const isInput =
-				tagName === "input" ||
-				tagName === "textarea" ||
-				tagName === "select" ||
-				target.isContentEditable;
-			return isInput;
-		},
-		[],
-	);
-
 	useEffect(() => {
 		const listener = (event: KeyboardEvent) => {
 			const usesPrimaryModifier = isMacPlatform
 				? event.metaKey && !event.ctrlKey
 				: event.ctrlKey && !event.metaKey;
 			if (!usesPrimaryModifier || event.altKey || event.shiftKey) return;
+			if (isPanelShortcutBlockedTarget(event.target)) return;
 
 			// CMD+1 for left panel
 			if (event.key === "1" || event.code === "Digit1") {
@@ -1378,27 +1381,19 @@ function LayoutShellContent({
 				event.stopPropagation();
 				event.stopImmediatePropagation?.();
 				event.returnValue = false;
-				if (
-					event.type === "keydown" &&
-					!event.repeat &&
-					!isInteractiveTarget(event.target)
-				) {
+				if (event.type === "keydown" && !event.repeat) {
 					toggleLeftSidebar();
 				}
 				return;
 			}
 
-			// CMD+3 for right panel
-			if (event.key === "3" || event.code === "Digit3") {
+			// CMD+2 for right panel
+			if (event.key === "2" || event.code === "Digit2") {
 				event.preventDefault();
 				event.stopPropagation();
 				event.stopImmediatePropagation?.();
 				event.returnValue = false;
-				if (
-					event.type === "keydown" &&
-					!event.repeat &&
-					!isInteractiveTarget(event.target)
-				) {
+				if (event.type === "keydown" && !event.repeat) {
 					toggleRightSidebar();
 				}
 				return;
@@ -1427,12 +1422,7 @@ function LayoutShellContent({
 				}
 			}
 		};
-	}, [
-		isMacPlatform,
-		toggleLeftSidebar,
-		toggleRightSidebar,
-		isInteractiveTarget,
-	]);
+	}, [isMacPlatform, toggleLeftSidebar, toggleRightSidebar]);
 
 	const animatedPanelClass = shouldAnimatePanels
 		? "transition-[flex-basis] duration-200 ease-in-out"
@@ -1456,6 +1446,7 @@ function LayoutShellContent({
 			>
 				<TopBar
 					workspaceName={workspaceName}
+					activeFileName={activeFileName}
 					onWorkspaceTitleClick={onOpenWorkspace}
 					menu={<FlashtypeMenu />}
 					onToggleLeftSidebar={toggleLeftSidebar}
@@ -1542,14 +1533,7 @@ function LayoutShellContent({
 						</Panel>
 					</PanelGroup>
 				</div>
-				<StatusBar
-					left={<BranchSwitcher />}
-					right={
-						activeStatusLabel ? (
-							<span className="truncate">{activeStatusLabel}</span>
-						) : null
-					}
-				/>
+				<StatusBar left={<BranchSwitcher />} />
 			</div>
 			<DragOverlay>
 				{activeId && activeDragView ? (

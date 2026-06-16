@@ -10,6 +10,8 @@ import {
 export type TopBarProps = {
 	/** Shown as the macOS-style proxy title in the header center. */
 	readonly workspaceName?: string | null;
+	/** Active document name, shown after the workspace as a breadcrumb. */
+	readonly activeFileName?: string | null;
 	/** Leading slot, e.g. the Flashtype menu. Must not require lix. */
 	readonly menu?: ReactNode;
 	/** Clicking the proxy title opens the directory picker to switch workspaces. */
@@ -32,6 +34,7 @@ export type TopBarProps = {
  */
 export function TopBar({
 	workspaceName = null,
+	activeFileName = null,
 	menu,
 	onWorkspaceTitleClick,
 	onToggleLeftSidebar,
@@ -56,7 +59,7 @@ export function TopBar({
 
 	const modifierKey = isMacPlatform ? "⌘" : "Ctrl";
 	const leftShortcut = isMacPlatform ? `${modifierKey}1` : `${modifierKey}+1`;
-	const rightShortcut = isMacPlatform ? `${modifierKey}3` : `${modifierKey}+3`;
+	const rightShortcut = isMacPlatform ? `${modifierKey}2` : `${modifierKey}+2`;
 	const showUpdateButton = isUpdateReady && Boolean(onInstallUpdate);
 
 	const handleInstallUpdate = async () => {
@@ -76,7 +79,6 @@ export function TopBar({
 					isMacPlatform ? "pl-[68px]" : ""
 				}`}
 			>
-				{menu}
 				<Tooltip delayDuration={500}>
 					<TooltipTrigger asChild>
 						<Button
@@ -96,38 +98,34 @@ export function TopBar({
 						Toggle left panel ({leftShortcut})
 					</TooltipContent>
 				</Tooltip>
-				<Tooltip delayDuration={500}>
-					<TooltipTrigger asChild>
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-7 w-7 rounded-[7px] text-ink-muted hover:bg-hover-soft hover:text-neutral-900 [-webkit-app-region:no-drag]"
-							type="button"
-							onClick={onToggleRightSidebar}
-							aria-label="Toggle right panel"
-							aria-pressed={isRightSidebarVisible}
-							data-state={isRightSidebarVisible ? "on" : "off"}
-						>
-							<PanelToggleIcon side="right" isActive={isRightSidebarVisible} />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent className="bg-neutral-900 text-neutral-0 [&_[class*='bg-secondary']]:bg-neutral-900 [&_[class*='fill-secondary']]:fill-neutral-900">
-						Toggle right panel ({rightShortcut})
-					</TooltipContent>
-				</Tooltip>
+				{menu}
 			</div>
 			{workspaceName ? (
-				<div className="pointer-events-none absolute inset-x-0 flex items-center justify-center">
-					<button
-						type="button"
-						onClick={onWorkspaceTitleClick}
-						disabled={!onWorkspaceTitleClick}
-						title="Switch workspace"
-						className="pointer-events-auto flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[12.5px] font-semibold text-neutral-700 enabled:hover:bg-hover-soft [-webkit-app-region:no-drag]"
-					>
-						<Folder className="size-3.25 text-ink-muted" strokeWidth={2} />
-						<span className="max-w-60 truncate">{workspaceName}</span>
-					</button>
+				<div className="pointer-events-none absolute inset-x-0 flex min-w-0 items-center justify-center px-[88px]">
+					<div className="pointer-events-auto flex min-w-0 items-center text-[12.5px] [-webkit-app-region:no-drag]">
+						<button
+							type="button"
+							onClick={onWorkspaceTitleClick}
+							disabled={!onWorkspaceTitleClick}
+							title="Switch workspace"
+							className={`flex h-7 min-w-0 items-center gap-1.5 rounded-[7px] px-2 enabled:hover:bg-hover-soft ${
+								activeFileName
+									? "font-medium text-ink-muted"
+									: "font-semibold text-neutral-700"
+							}`}
+						>
+							<Folder className="size-3.25 text-ink-muted" strokeWidth={2} />
+							<span className="max-w-60 truncate">{workspaceName}</span>
+						</button>
+						{activeFileName ? (
+							<>
+								<span className="mx-0.5 shrink-0 text-neutral-300">/</span>
+								<span className="max-w-60 truncate px-1 font-semibold text-neutral-900">
+									{activeFileName}
+								</span>
+							</>
+						) : null}
+					</div>
 				</div>
 			) : null}
 			<div className="flex flex-1 items-center justify-end gap-1.5">
@@ -170,6 +168,25 @@ export function TopBar({
 						</svg>
 					</a>
 				</Button>
+				<Tooltip delayDuration={500}>
+					<TooltipTrigger asChild>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="h-7 w-7 rounded-[7px] text-chrome-icon hover:bg-hover-soft hover:text-neutral-900 [-webkit-app-region:no-drag]"
+							type="button"
+							onClick={onToggleRightSidebar}
+							aria-label="Toggle right panel"
+							aria-pressed={isRightSidebarVisible}
+							data-state={isRightSidebarVisible ? "on" : "off"}
+						>
+							<PanelToggleIcon side="right" isActive={isRightSidebarVisible} />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent className="bg-neutral-900 text-neutral-0 [&_[class*='bg-secondary']]:bg-neutral-900 [&_[class*='fill-secondary']]:fill-neutral-900">
+						Toggle right panel ({rightShortcut})
+					</TooltipContent>
+				</Tooltip>
 			</div>
 		</header>
 	);
