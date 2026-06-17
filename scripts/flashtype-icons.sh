@@ -6,8 +6,14 @@ repo_root="$(cd "$script_dir/.." && pwd)"
 cd "$repo_root"
 
 favicon_source="assets/icons/flashtype/favicon.svg"
-app_source="assets/icons/flashtype/app.svg"
+app_source="assets/icons/flashtype/app-rounded.svg"
 markdown_source="assets/icons/flashtype/markdown-document.svg"
+
+if ! command -v resvg >/dev/null 2>&1; then
+	echo "Missing required command: resvg" >&2
+	echo "Install it with: cargo install resvg" >&2
+	exit 1
+fi
 
 favicon_destinations=(
 	"public/icons/flashtype/flashtype-favicon.svg"
@@ -53,7 +59,7 @@ render_png() {
 	local size="$3"
 
 	ensure_parent "$destination"
-	sips -s format png -z "$size" "$size" "$source" --out "$destination" >/dev/null
+	resvg --width "$size" --height "$size" "$source" "$destination" >/dev/null
 	echo "Rendered $repo_root/$destination"
 }
 

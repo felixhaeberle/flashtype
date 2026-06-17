@@ -3,7 +3,7 @@
 This directory contains the canonical SVG sources for Flashtype icons:
 
 - `favicon.svg` for website favicons
-- `app.svg` for app icons
+- `app-rounded.svg` for app icons
 - `markdown-document.svg` for Markdown document icons
 
 Run `cargo flashtype-icons` from the repository root to regenerate:
@@ -15,4 +15,4 @@ Run `cargo flashtype-icons` from the repository root to regenerate:
 - `website/public/favicon.svg`
 
 The Cargo alias uses `cargo-bash` to run `scripts/flashtype-icons.sh`.
-The generator uses macOS `sips` and `iconutil`.
+The generator uses `resvg` for SVG-to-PNG rendering and macOS `iconutil` for ICNS packing.
