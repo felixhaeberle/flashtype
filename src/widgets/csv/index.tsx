@@ -1,6 +1,5 @@
 import { Suspense, useMemo, useRef, type CSSProperties } from "react";
 import { AlertTriangle, Loader2, Table2 } from "lucide-react";
-import { parse } from "papaparse";
 import {
 	flexRender,
 	getCoreRowModel,
@@ -10,37 +9,66 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { LixProvider, useQueryTakeFirst } from "@/lib/lix-react";
 import { qb } from "@/lib/lix-kysely";
+import { decodeFileDataToText } from "@/lib/decode-file-data";
+import { ExternalWriteReviewControls } from "@/widget-runtime/external-write-review-controls";
+import {
+	EXTERNAL_WRITE_REVIEW_LAUNCH_ARG,
+	type ExternalWriteReview,
+} from "@/widget-runtime/external-write-review";
 import { createReactWidgetDefinition } from "../../widget-runtime/react-widget";
 import { CSV_WIDGET_KIND } from "../../widget-runtime/widget-instance-helpers";
+import { parseCsv, type CsvParseResult, type CsvRow } from "./csv-data";
+import { renderCsvReviewDiffHtml } from "./render-review-diff-html";
+import "./style.css";
 
 type CsvViewProps = {
 	readonly fileId: string;
-};
-
-type CsvRow = {
-	readonly rowNumber: number;
-	readonly cells: readonly string[];
-};
-
-type CsvParseResult = {
-	readonly columns: readonly string[];
-	readonly rows: readonly CsvRow[];
-	readonly warnings: readonly string[];
+	readonly externalWriteReview?: ExternalWriteReview | null;
+	readonly isActiveView?: boolean;
+	readonly isPanelFocused?: boolean;
+	readonly onAcceptReview?: (args: {
+		readonly fileId: string;
+		readonly reviewId: string;
+	}) => void;
+	readonly onRejectReview?: (args: {
+		readonly fileId: string;
+		readonly reviewId: string;
+	}) => Promise<void>;
 };
 
 const COLUMN_MIN_WIDTH = 72;
-const COLUMN_MAX_WIDTH = 320;
 const ROW_HEIGHT = 48;
 
-export function CsvView({ fileId }: CsvViewProps) {
+export function CsvView({
+	fileId,
+	externalWriteReview = null,
+	isActiveView = true,
+	isPanelFocused = true,
+	onAcceptReview,
+	onRejectReview,
+}: CsvViewProps) {
 	return (
 		<Suspense fallback={<CsvLoadingSpinner />}>
-			<CsvViewContent fileId={fileId} />
+			<CsvViewContent
+				fileId={fileId}
+				externalWriteReview={externalWriteReview}
+				isActiveView={isActiveView}
+				isPanelFocused={isPanelFocused}
+				onAcceptReview={onAcceptReview}
+				onRejectReview={onRejectReview}
+			/>
 		</Suspense>
 	);
 }
 
-function CsvViewContent({ fileId }: CsvViewProps) {
+function CsvViewContent({
+	fileId,
+	externalWriteReview = null,
+	isActiveView = true,
+	isPanelFocused = true,
+	onAcceptReview,
+	onRejectReview,
+}: CsvViewProps) {
 	assertFileId(fileId);
 
 	const fileRow = useQueryTakeFirst((lix) =>
@@ -53,7 +81,7 @@ function CsvViewContent({ fileId }: CsvViewProps) {
 
 	const parsed = useMemo<CsvParseResult | null>(() => {
 		if (!fileRow) return null;
-		return parseCsv(decodeFileData(fileRow.data));
+		return parseCsv(decodeFileDataToText(fileRow.data));
 	}, [fileRow]);
 
 	if (!fileRow) {
@@ -69,30 +97,76 @@ function CsvViewContent({ fileId }: CsvViewProps) {
 	}
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col bg-background">
+		<div className="csv-view flex min-h-0 flex-1 flex-col bg-background">
 			{parsed.warnings.length > 0 ? (
 				<div className="mx-5 mt-3 flex shrink-0 items-start gap-2 rounded-[8px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
 					<AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
 					<span className="min-w-0 truncate">{parsed.warnings[0]}</span>
 				</div>
 			) : null}
-			<CsvTable parsed={parsed} />
+			<div className="relative min-h-0 flex-1 overflow-hidden">
+				<CsvTable parsed={parsed} />
+				{externalWriteReview ? (
+					<CsvReviewOverlay
+						fileId={fileRow.id}
+						review={externalWriteReview}
+						isActive={isActiveView && isPanelFocused}
+						onAccept={onAcceptReview}
+						onReject={onRejectReview}
+					/>
+				) : null}
+			</div>
+		</div>
+	);
+}
+
+function CsvReviewOverlay({
+	fileId,
+	review,
+	isActive,
+	onAccept,
+	onReject,
+}: {
+	readonly fileId: string;
+	readonly review: ExternalWriteReview;
+	readonly isActive: boolean;
+	readonly onAccept?: (args: {
+		readonly fileId: string;
+		readonly reviewId: string;
+	}) => void;
+	readonly onReject?: (args: {
+		readonly fileId: string;
+		readonly reviewId: string;
+	}) => Promise<void>;
+}) {
+	const diffHtml = useMemo(() => renderCsvReviewDiffHtml(review), [review]);
+	const rejectReview = () =>
+		void onReject?.({ fileId, reviewId: review.reviewId });
+
+	return (
+		<div className="csv-review-overlay">
+			<div
+				className="csv-review-table"
+				dangerouslySetInnerHTML={{ __html: diffHtml }}
+			/>
+			<ExternalWriteReviewControls
+				isActive={isActive}
+				onAccept={() => onAccept?.({ fileId, reviewId: review.reviewId })}
+				onReject={rejectReview}
+			/>
 		</div>
 	);
 }
 
 function CsvTable({ parsed }: { readonly parsed: CsvParseResult }) {
 	const parentRef = useRef<HTMLDivElement | null>(null);
-	const columnWidths = useMemo(() => computeColumnWidths(parsed), [parsed]);
-	const growableColumns = useMemo(() => computeGrowableColumns(parsed), [parsed]);
 	const columns = useMemo<ColumnDef<CsvRow>[]>(() => {
 		return parsed.columns.map((header, index) => ({
 			id: `column_${index}`,
 			header,
 			accessorFn: (row: CsvRow) => row.cells[index] ?? "",
-			size: columnWidths[index] ?? COLUMN_MIN_WIDTH,
 		}));
-	}, [columnWidths, parsed.columns]);
+	}, [parsed.columns]);
 	const table = useReactTable({
 		data: [...parsed.rows],
 		columns,
@@ -104,18 +178,17 @@ function CsvTable({ parsed }: { readonly parsed: CsvParseResult }) {
 		getScrollElement: () => parentRef.current,
 		estimateSize: () => ROW_HEIGHT,
 		measureElement:
-			typeof window !== "undefined" &&
-			!navigator.userAgent.includes("Firefox")
+			typeof window !== "undefined" && !navigator.userAgent.includes("Firefox")
 				? (element) => element?.getBoundingClientRect().height
 				: undefined,
 		overscan: 12,
 	});
-	const totalWidth = columnWidths.reduce((sum, width) => sum + width, 0);
+	const totalWidth = parsed.columns.length * COLUMN_MIN_WIDTH;
 
 	return (
 		<div
 			ref={parentRef}
-			className="min-h-0 flex-1 overflow-auto bg-background"
+			className="h-full min-h-0 flex-1 overflow-auto bg-background"
 		>
 			<div style={{ minWidth: totalWidth }} className="relative w-full">
 				<div className="sticky top-0 z-10 flex h-10 w-full border-b border-island-divider bg-neutral-50 text-[11px] font-bold uppercase tracking-[0.04em] text-neutral-600">
@@ -123,10 +196,7 @@ function CsvTable({ parsed }: { readonly parsed: CsvParseResult }) {
 						<div
 							key={header.id}
 							className="flex h-10 items-center border-r border-[#f1ece5] px-4 last:border-r-0"
-							style={columnStyle(
-								header.getSize(),
-								growableColumns[columnIndexFromId(header.id)] ?? false,
-							)}
+							style={columnStyle()}
 							title={String(header.column.columnDef.header ?? "")}
 						>
 							<div className="truncate">
@@ -160,10 +230,7 @@ function CsvTable({ parsed }: { readonly parsed: CsvParseResult }) {
 									<div
 										key={cell.id}
 										className="border-r border-[#f4f1ec] px-4 py-0 last:border-r-0"
-										style={columnStyle(
-											cell.column.getSize(),
-											growableColumns[columnIndexFromId(cell.column.id)] ?? false,
-										)}
+										style={columnStyle()}
 										title={String(cell.getValue() ?? "")}
 									>
 										<div
@@ -188,59 +255,18 @@ function CsvTable({ parsed }: { readonly parsed: CsvParseResult }) {
 	);
 }
 
-function computeColumnWidths(parsed: CsvParseResult): number[] {
-	return parsed.columns.map((header, index) => {
-		const values = parsed.rows.slice(0, 100).map((row) => row.cells[index] ?? "");
-		const maxLength = Math.max(header.length, ...values.map(measureCellLength));
-		const numeric = values.length > 0 && values.every(isNumericValue);
-		const baseWidth = numeric ? maxLength * 11 + 36 : maxLength * 8 + 48;
-		return clamp(baseWidth, COLUMN_MIN_WIDTH, COLUMN_MAX_WIDTH);
-	});
-}
-
-function computeGrowableColumns(parsed: CsvParseResult): boolean[] {
-	const candidates = parsed.columns.map((header, index) => {
-		const values = parsed.rows.slice(0, 100).map((row) => row.cells[index] ?? "");
-		return !isLikelyNumericColumn(header, values);
-	});
-	return candidates.some(Boolean) ? candidates : parsed.columns.map(() => true);
-}
-
-function isLikelyNumericColumn(header: string, values: readonly string[]): boolean {
-	const lowerHeader = header.trim().toLowerCase();
-	if (lowerHeader === "id" || lowerHeader.endsWith("_id")) return true;
-	const presentValues = values.filter((value) => value.trim() !== "");
-	return (
-		presentValues.length > 0 &&
-		presentValues.every((value) => isNumericValue(value))
-	);
-}
-
-function columnIndexFromId(columnId: string): number {
-	const match = /^column_(\d+)$/.exec(columnId);
-	return match ? Number(match[1]) : -1;
-}
-
-function measureCellLength(value: string): number {
-	return value.trim().length;
-}
-
-function clamp(value: number, min: number, max: number): number {
-	return Math.min(max, Math.max(min, Math.ceil(value)));
-}
-
 function cellValueClassName(value: string, isFirstColumn: boolean): string {
 	const base = "flex min-h-12 items-center whitespace-normal break-words py-2";
 	if (isEmailLike(value)) {
 		return `${base} font-mono text-[12.5px] text-brand-700`;
 	}
 	if (isNumericValue(value)) {
-		return `${base} justify-end font-mono text-[13px] text-neutral-700`;
+		return `${base} font-mono text-[13px] text-neutral-700`;
 	}
 	if (isFirstColumn) {
 		return `${base} font-mono text-[12.5px] text-neutral-400`;
 	}
-	return `${base} font-medium text-neutral-900`;
+	return `${base} font-normal text-neutral-900`;
 }
 
 function isEmailLike(value: string): boolean {
@@ -276,74 +302,12 @@ function CsvLoadingSpinner() {
 	);
 }
 
-export function parseCsv(rawCsv: string): CsvParseResult {
-	const result = parse<string[]>(rawCsv.replace(/^\uFEFF/, ""), {
-		skipEmptyLines: false,
-	});
-	const rawRows = trimTrailingEmptyRows(
-		result.data.map((row) => row.map((cell) => String(cell ?? ""))),
-	);
-	const maxColumns = rawRows.reduce((max, row) => Math.max(max, row.length), 0);
-	if (rawRows.length === 0 || maxColumns === 0) {
-		return { columns: [], rows: [], warnings: csvWarnings(result.errors) };
-	}
+export { parseCsv, renderCsvReviewDiffHtml };
 
-	const columns = normalizeHeaders(rawRows[0] ?? [], maxColumns);
-	const rows = rawRows.slice(1).map((row, index) => ({
-		rowNumber: index + 1,
-		cells: Array.from({ length: maxColumns }, (_, cellIndex) =>
-			String(row[cellIndex] ?? ""),
-		),
-	}));
-	return { columns, rows, warnings: csvWarnings(result.errors) };
-}
-
-function normalizeHeaders(
-	headerRow: readonly string[],
-	columnCount: number,
-): string[] {
-	const seen = new Map<string, number>();
-	return Array.from({ length: columnCount }, (_, index) => {
-		const raw = headerRow[index]?.trim();
-		const base = raw && raw.length > 0 ? raw : `Column ${index + 1}`;
-		const count = seen.get(base) ?? 0;
-		seen.set(base, count + 1);
-		return count === 0 ? base : `${base} ${count + 1}`;
-	});
-}
-
-function trimTrailingEmptyRows(rows: string[][]): string[][] {
-	let end = rows.length;
-	while (end > 0 && rows[end - 1]?.every((cell) => cell.trim() === "")) {
-		end -= 1;
-	}
-	return rows.slice(0, end);
-}
-
-function csvWarnings(errors: readonly { message: string }[]): string[] {
-	return errors.map((error) => error.message).filter(Boolean);
-}
-
-function decodeFileData(data: unknown): string {
-	if (typeof data === "string") return data;
-	if (data instanceof Uint8Array) return new TextDecoder().decode(data);
-	if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
-	if (ArrayBuffer.isView(data)) {
-		return new TextDecoder().decode(
-			new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
-		);
-	}
-	if (Array.isArray(data)) {
-		return new TextDecoder().decode(Uint8Array.from(data as number[]));
-	}
-	return "";
-}
-
-function columnStyle(width: number, grow = false): CSSProperties {
+function columnStyle(): CSSProperties {
 	return {
-		flex: `${grow ? 1 : 0} 0 ${width}px`,
-		width,
-		minWidth: width,
+		flex: "1 0 0",
+		minWidth: COLUMN_MIN_WIDTH,
 	};
 }
 
@@ -361,7 +325,18 @@ export const widget = createReactWidgetDefinition({
 	fileExtensions: ["csv"],
 	component: ({ context, instance }) => (
 		<LixProvider lix={context.lix}>
-			<CsvView fileId={instance.state?.fileId as string} />
+			<CsvView
+				fileId={instance.state?.fileId as string}
+				externalWriteReview={
+					(instance.launchArgs?.[EXTERNAL_WRITE_REVIEW_LAUNCH_ARG] as
+						| ExternalWriteReview
+						| undefined) ?? null
+				}
+				onAcceptReview={context.acceptExternalWriteReview}
+				onRejectReview={context.rejectExternalWriteReview}
+				isActiveView={context.isActiveView ?? false}
+				isPanelFocused={context.isPanelFocused ?? false}
+			/>
 		</LixProvider>
 	),
 });

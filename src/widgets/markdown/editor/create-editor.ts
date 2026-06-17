@@ -20,6 +20,7 @@ type CreateEditorArgs = {
 	onCreate?: (args: { editor: Editor }) => void;
 	onUpdate?: (args: { editor: Editor }) => void | false;
 	editorProps?: any;
+	editable?: boolean;
 	fileId?: string;
 	persistDebounceMs?: number;
 	persistState?: boolean;
@@ -72,6 +73,7 @@ export function createEditor(args: CreateEditorArgs): Editor {
 		onCreate,
 		onUpdate,
 		editorProps,
+		editable = true,
 		fileId,
 		persistDebounceMs,
 		persistState = true,
@@ -116,6 +118,7 @@ export function createEditor(args: CreateEditorArgs): Editor {
 			}),
 			TableNavigationExtension,
 		],
+		editable,
 		content: astToTiptapDoc(ast) as any,
 		onCreate: ({ editor }) => {
 			currentEditor = editor as Editor;

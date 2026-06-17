@@ -1,5 +1,6 @@
 import type { Lix } from "@/lib/lix-types";
 import { qb } from "@/lib/lix-kysely";
+import { markFlashtypeMarkdownWrite } from "../external-write-tracking";
 
 export async function upsertMarkdownFile(args: {
 	lix: Lix;
@@ -11,6 +12,7 @@ export async function upsertMarkdownFile(args: {
 	const { lix, fileId, markdown, path, metadata } = args;
 	const data = new TextEncoder().encode(markdown);
 	const db = qb(lix);
+	markFlashtypeMarkdownWrite(fileId, markdown);
 
 	const existing = await db
 		.selectFrom("lix_file")
