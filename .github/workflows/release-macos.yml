@@ -86,8 +86,7 @@ jobs:
             export PATH="$HOME/.cargo/bin:$PATH"
           fi
           rustup target add wasm32-unknown-unknown
-          cargo install wasm-bindgen-cli --version 0.2.108 --locked
-          cargo install cargo-bash --locked
+          cargo install wasm-bindgen-cli@0.2.108 cargo-bash resvg@0.47.0 --locked
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
