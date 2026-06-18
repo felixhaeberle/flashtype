@@ -30,14 +30,10 @@ export async function resolveWorkspaceTarget(requestedPath) {
 		if (stats.isFile()) {
 			const workspaceDir = await findLixWorkspaceRoot(path.dirname(resolved));
 			if (!workspaceDir) {
+				const workspace = createEphemeralFilesWorkspace([resolved]);
 				return {
-					workspace: {
-						kind: "ephemeralFiles",
-						path: resolved,
-						sourceFilePath: resolved,
-						name: path.basename(resolved),
-					},
-					pendingOpenFilePath: toLixFilePath(path.basename(resolved)),
+					workspace,
+					pendingOpenFilePaths: workspace.files,
 				};
 			}
 			return {
@@ -46,9 +42,9 @@ export async function resolveWorkspaceTarget(requestedPath) {
 					path: workspaceDir,
 					name: path.basename(workspaceDir),
 				},
-				pendingOpenFilePath: toLixFilePath(
-					path.relative(workspaceDir, resolved),
-				),
+				pendingOpenFilePaths: [
+					toPortableRelativePath(path.relative(workspaceDir, resolved)),
+				],
 			};
 		}
 	} catch {
@@ -61,8 +57,53 @@ export async function resolveWorkspaceTarget(requestedPath) {
 			path: resolved,
 			name: path.basename(resolved),
 		},
-		pendingOpenFilePath: null,
+		pendingOpenFilePaths: [],
 	};
+}
+
+export async function resolveWorkspaceTargets(requestedPaths) {
+	const targets = [];
+	const standaloneMarkdownFiles = [];
+	let standaloneMarkdownInsertIndex = null;
+
+	for (let requestedPath of requestedPaths) {
+		if (
+			requestedPath &&
+			typeof requestedPath === "object" &&
+			typeof requestedPath.kind === "string"
+		) {
+			if (requestedPath.kind === "path") {
+				requestedPath = requestedPath.path;
+			} else {
+				const target = await resolveWorkspaceSessionEntry(requestedPath);
+				if (target) {
+					targets.push(target);
+				}
+				continue;
+			}
+		}
+
+		const resolved = path.resolve(String(requestedPath));
+		const markdownFileTarget = await resolveStandaloneMarkdownFile(resolved);
+		if (markdownFileTarget) {
+			if (standaloneMarkdownInsertIndex === null) {
+				standaloneMarkdownInsertIndex = targets.length;
+			}
+			standaloneMarkdownFiles.push(markdownFileTarget);
+			continue;
+		}
+		targets.push(await resolveWorkspaceTarget(resolved));
+	}
+
+	if (standaloneMarkdownFiles.length > 0) {
+		const workspace = createEphemeralFilesWorkspace(standaloneMarkdownFiles);
+		targets.splice(standaloneMarkdownInsertIndex ?? targets.length, 0, {
+			workspace,
+			pendingOpenFilePaths: workspace.files,
+		});
+	}
+
+	return targets;
 }
 
 export async function resolveWorkspace(requestedPath) {
@@ -74,19 +115,26 @@ export async function setWorkspaceFromPath(
 	window,
 	options = {},
 ) {
+	return await setWorkspaceFromTarget(
+		await resolveWorkspaceTarget(requestedPath),
+		window,
+		options,
+	);
+}
+
+export async function setWorkspaceFromTarget(target, window, options = {}) {
 	const state = getOrCreateWindowState(window);
 	return await enqueueWorkspaceChange(state, async () => {
-		const target = await resolveWorkspaceTarget(requestedPath);
 		const nextWorkspace = target.workspace;
-		if (state.workspace?.path === nextWorkspace.path) {
-			state.pendingOpenFilePath = target.pendingOpenFilePath;
+		if (workspaceKey(state.workspace) === workspaceKey(nextWorkspace)) {
+			state.pendingOpenFilePaths = target.pendingOpenFilePaths;
 			applyWindowChrome(window);
 			await options.afterChange?.(state.workspace, window);
 			return state.workspace;
 		}
 		await options.beforeChange?.(nextWorkspace, window);
 		state.workspace = nextWorkspace;
-		state.pendingOpenFilePath = target.pendingOpenFilePath;
+		state.pendingOpenFilePaths = target.pendingOpenFilePaths;
 		applyWindowChrome(window);
 		await options.afterChange?.(state.workspace, window);
 		return state.workspace;
@@ -144,12 +192,12 @@ export function applyWorkspaceWindowChrome(window) {
 	applyWindowChrome(window);
 }
 
-export function consumePendingOpenFile(window) {
+export function consumePendingOpenFiles(window) {
 	const state = getWindowState(window);
-	if (!state) return null;
-	const pendingOpenFilePath = state.pendingOpenFilePath;
-	state.pendingOpenFilePath = null;
-	return pendingOpenFilePath ?? null;
+	if (!state) return [];
+	const pendingOpenFilePaths = state.pendingOpenFilePaths;
+	state.pendingOpenFilePaths = [];
+	return pendingOpenFilePaths ?? [];
 }
 
 function applyWindowChrome(window) {
@@ -159,7 +207,153 @@ function applyWindowChrome(window) {
 	}
 	window.setTitle(workspace.name);
 	// macOS proxy title: Cmd-click shows the folder's path popover.
-	window.setRepresentedFilename(workspace.path);
+	window.setRepresentedFilename(workspace.representedPath ?? workspace.path);
+}
+
+async function resolveWorkspaceSessionEntry(workspaceEntry) {
+	if (workspaceEntry.kind === "directory") {
+		return await resolveWorkspaceTarget(workspaceEntry.path);
+	}
+	if (workspaceEntry.kind === "ephemeralFiles") {
+		const sourceFilePaths = [];
+		for (const sourceFilePath of workspaceEntry.sourceFilePaths ?? []) {
+			try {
+				if ((await stat(sourceFilePath)).isFile()) {
+					sourceFilePaths.push(path.resolve(sourceFilePath));
+				}
+			} catch {
+				// Drop missing files from restored ephemeral workspaces.
+			}
+		}
+		if (sourceFilePaths.length === 0) {
+			return null;
+		}
+		const workspace = createEphemeralFilesWorkspace(sourceFilePaths);
+		return {
+			workspace,
+			pendingOpenFilePaths: workspace.files,
+		};
+	}
+	if (workspaceEntry.kind === "path") {
+		return await resolveWorkspaceTarget(workspaceEntry.path);
+	}
+	return null;
+}
+
+async function resolveStandaloneMarkdownFile(resolvedPath) {
+	if (!isMarkdownFilePath(resolvedPath)) {
+		return null;
+	}
+	try {
+		if (!(await stat(resolvedPath)).isFile()) {
+			return null;
+		}
+	} catch {
+		return null;
+	}
+	const workspaceDir = await findLixWorkspaceRoot(path.dirname(resolvedPath));
+	return workspaceDir ? null : resolvedPath;
+}
+
+function createEphemeralFilesWorkspace(sourceFilePaths) {
+	const normalizedSourceFilePaths = normalizeSourceFilePaths(sourceFilePaths);
+	const baseDirectory = deepestCommonParent(
+		normalizedSourceFilePaths.map((sourceFilePath) =>
+			path.dirname(sourceFilePath),
+		),
+	);
+	const files = normalizedSourceFilePaths.map((sourceFilePath) =>
+		toPortableRelativePath(path.relative(baseDirectory, sourceFilePath)),
+	);
+	return {
+		kind: "ephemeralFiles",
+		path:
+			normalizedSourceFilePaths.length === 1
+				? normalizedSourceFilePaths[0]
+				: baseDirectory,
+		representedPath:
+			normalizedSourceFilePaths.length === 1
+				? normalizedSourceFilePaths[0]
+				: baseDirectory,
+		baseDirectory,
+		sourceFilePath: normalizedSourceFilePaths[0],
+		sourceFilePaths: normalizedSourceFilePaths,
+		files,
+		name:
+			normalizedSourceFilePaths.length === 1
+				? path.basename(normalizedSourceFilePaths[0])
+				: `${normalizedSourceFilePaths.length} Markdown files`,
+	};
+}
+
+function normalizeSourceFilePaths(sourceFilePaths) {
+	const seen = new Set();
+	const normalizedSourceFilePaths = [];
+	for (const sourceFilePath of sourceFilePaths) {
+		if (typeof sourceFilePath !== "string" || sourceFilePath.length === 0) {
+			continue;
+		}
+		const normalizedSourceFilePath = path.resolve(sourceFilePath);
+		if (seen.has(normalizedSourceFilePath)) {
+			continue;
+		}
+		seen.add(normalizedSourceFilePath);
+		normalizedSourceFilePaths.push(normalizedSourceFilePath);
+	}
+	return normalizedSourceFilePaths;
+}
+
+function toPortableRelativePath(relativePath) {
+	return relativePath.split(path.sep).filter(Boolean).join("/");
+}
+
+function deepestCommonParent(directories) {
+	if (directories.length === 0) {
+		return path.resolve(".");
+	}
+	const [firstDirectory, ...remainingDirectories] = directories.map(
+		(directory) => path.resolve(directory),
+	);
+	const root = path.parse(firstDirectory).root;
+	const commonSegments = firstDirectory
+		.slice(root.length)
+		.split(path.sep)
+		.filter(Boolean);
+	for (const directory of remainingDirectories) {
+		const directoryRoot = path.parse(directory).root;
+		if (directoryRoot !== root) {
+			return root;
+		}
+		const segments = directory
+			.slice(root.length)
+			.split(path.sep)
+			.filter(Boolean);
+		let index = 0;
+		while (
+			index < commonSegments.length &&
+			index < segments.length &&
+			commonSegments[index] === segments[index]
+		) {
+			index += 1;
+		}
+		commonSegments.length = index;
+	}
+	return path.join(root, ...commonSegments);
+}
+
+function workspaceKey(workspace) {
+	if (!workspace) {
+		return null;
+	}
+	if (workspace.kind === "ephemeralFiles") {
+		return `${workspace.kind}:${workspace.sourceFilePaths.join("\0")}`;
+	}
+	return `${workspace.kind}:${workspace.path}`;
+}
+
+function isMarkdownFilePath(filePath) {
+	const extension = path.extname(filePath).toLowerCase();
+	return extension === ".md" || extension === ".markdown";
 }
 
 async function showWorkspaceDialog(window) {
@@ -205,10 +399,6 @@ async function isFile(filePath) {
 	}
 }
 
-function toLixFilePath(relativePath) {
-	return `/${relativePath.split(path.sep).filter(Boolean).join("/")}`;
-}
-
 function enqueueWorkspaceChange(state, operation) {
 	const result = state.workspaceChangeQueue.catch(() => {}).then(operation);
 	state.workspaceChangeQueue = result.catch(() => {});
@@ -225,8 +415,8 @@ export function registerWorkspaceIpc(getWindowForEvent, options = {}) {
 		return getWorkspace(getWindowForEvent(event));
 	});
 
-	ipcMain.handle("workspace:consumePendingOpenFile", (event) => {
-		return consumePendingOpenFile(getWindowForEvent(event));
+	ipcMain.handle("workspace:consumePendingOpenFiles", (event) => {
+		return consumePendingOpenFiles(getWindowForEvent(event));
 	});
 
 	ipcMain.handle("workspace:open", async (event, payload) => {
@@ -274,7 +464,7 @@ function getOrCreateWindowState(window) {
 	}
 	const state = {
 		workspace: null,
-		pendingOpenFilePath: null,
+		pendingOpenFilePaths: [],
 		workspaceChangeQueue: Promise.resolve(),
 	};
 	windowStates.set(window.id, state);

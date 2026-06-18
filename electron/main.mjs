@@ -10,7 +10,8 @@ import {
 	applyWorkspaceWindowChrome,
 	getWorkspace,
 	registerWorkspaceIpc,
-	setWorkspaceFromPath,
+	resolveWorkspaceTargets,
+	setWorkspaceFromTarget,
 } from "./workspace.mjs";
 import { captureAppOpened } from "./telemetry.mjs";
 import {
@@ -22,10 +23,12 @@ import {
 	resolveWorkspacePathArguments,
 } from "./launch-args.mjs";
 import {
-	filterExistingWorkspacePaths,
+	filterExistingWorkspaceEntries,
 	normalizeWorkspacePaths,
-	readWorkspaceSessionPaths,
-	writeWorkspaceSessionPathsSync,
+	normalizeWorkspaceSessionEntries,
+	readWorkspaceSessionEntries,
+	workspaceToSessionEntry,
+	writeWorkspaceSessionEntriesSync,
 } from "./workspace-session.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,14 +36,17 @@ const execFileAsync = promisify(execFile);
 const AUTO_UPDATE_CHECK_DELAY_MS = 10_000;
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const TELEMETRY_HEARTBEAT_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const OPEN_FILE_BATCH_DELAY_MS = 50;
 const DEV_SERVER_URL =
 	process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:4173";
 const isHeadless = process.env.FLASHTYPE_HEADLESS === "1";
 const workspaceWindows = new Set();
-const openWorkspacePathsByWindowId = new Map();
-const pendingWorkspaceOpenPaths = [];
+const openWorkspaceEntriesByWindowId = new Map();
+const pendingWorkspaceOpenRequests = [];
+const pendingOpenFileEventPaths = [];
 let readyForWorkspaceOpens = false;
 let isQuitting = false;
+let openFileBatchTimer = null;
 let autoUpdaterInstance = null;
 let autoUpdateListenersRegistered = false;
 let updateCheckInProgress = false;
@@ -80,10 +86,18 @@ app.on("open-file", (event, filePath) => {
 
 function openWorkspacePathWhenReady(workspacePath) {
 	if (!readyForWorkspaceOpens) {
-		pendingWorkspaceOpenPaths.push(workspacePath);
+		pendingWorkspaceOpenRequests.push(workspacePath);
 		return;
 	}
-	void createMainWindow(workspacePath);
+	pendingOpenFileEventPaths.push(workspacePath);
+	if (openFileBatchTimer !== null) {
+		clearTimeout(openFileBatchTimer);
+	}
+	openFileBatchTimer = setTimeout(() => {
+		openFileBatchTimer = null;
+		const paths = pendingOpenFileEventPaths.splice(0);
+		void openWorkspaceRequests(paths);
+	}, OPEN_FILE_BATCH_DELAY_MS);
 }
 
 async function openWorkspacePathArguments(
@@ -104,12 +118,17 @@ async function openWorkspacePathArguments(
 	}
 
 	if (!readyForWorkspaceOpens) {
-		pendingWorkspaceOpenPaths.push(...workspacePaths);
+		pendingWorkspaceOpenRequests.push(...workspacePaths);
 		return;
 	}
 
-	for (const workspacePath of workspacePaths) {
-		await createMainWindow(workspacePath);
+	await openWorkspaceRequests(workspacePaths);
+}
+
+async function openWorkspaceRequests(workspaceRequests) {
+	const workspaceTargets = await resolveWorkspaceTargets(workspaceRequests);
+	for (const workspaceTarget of workspaceTargets) {
+		await createMainWindow(workspaceTarget);
 	}
 }
 
@@ -140,7 +159,11 @@ function recordOpenWorkspacePath(window, workspace) {
 	if (!window || window.isDestroyed() || !workspace) {
 		return;
 	}
-	openWorkspacePathsByWindowId.set(window.id, workspace.path);
+	const workspaceEntry = workspaceToSessionEntry(workspace);
+	if (!workspaceEntry) {
+		return;
+	}
+	openWorkspaceEntriesByWindowId.set(window.id, workspaceEntry);
 	persistOpenWorkspacePathsSoon();
 }
 
@@ -148,14 +171,16 @@ function forgetOpenWorkspacePath(window) {
 	if (!window) {
 		return;
 	}
-	openWorkspacePathsByWindowId.delete(window.id);
+	openWorkspaceEntriesByWindowId.delete(window.id);
 	if (!isQuitting) {
 		persistOpenWorkspacePathsSoon();
 	}
 }
 
-function getOpenWorkspacePaths() {
-	return normalizeWorkspacePaths([...openWorkspacePathsByWindowId.values()]);
+function getOpenWorkspaceEntries() {
+	return normalizeWorkspaceSessionEntries([
+		...openWorkspaceEntriesByWindowId.values(),
+	]);
 }
 
 function persistOpenWorkspacePathsSoon() {
@@ -163,9 +188,9 @@ function persistOpenWorkspacePathsSoon() {
 		return;
 	}
 	try {
-		writeWorkspaceSessionPathsSync(
+		writeWorkspaceSessionEntriesSync(
 			app.getPath("userData"),
-			getOpenWorkspacePaths(),
+			getOpenWorkspaceEntries(),
 		);
 	} catch (error) {
 		console.warn("Failed to persist Flashtype workspace session", error);
@@ -174,30 +199,38 @@ function persistOpenWorkspacePathsSoon() {
 
 function flushOpenWorkspacePaths() {
 	try {
-		writeWorkspaceSessionPathsSync(
+		writeWorkspaceSessionEntriesSync(
 			app.getPath("userData"),
-			getOpenWorkspacePaths(),
+			getOpenWorkspaceEntries(),
 		);
 	} catch (error) {
 		console.warn("Failed to flush Flashtype workspace session", error);
 	}
 }
 
-function mergeRestoredAndExplicitWorkspacePaths(
-	restoredWorkspacePaths,
+function mergeRestoredAndExplicitWorkspaceRequests(
+	restoredWorkspaceEntries,
 	explicitWorkspacePaths,
 ) {
-	const normalizedExplicitWorkspacePaths =
-		normalizeWorkspacePaths(explicitWorkspacePaths);
+	const normalizedExplicitWorkspacePaths = normalizeWorkspacePaths(
+		explicitWorkspacePaths,
+	);
 	const explicitWorkspacePathSet = new Set(normalizedExplicitWorkspacePaths);
-	const restoredOnlyWorkspacePaths = normalizeWorkspacePaths(
-		restoredWorkspacePaths,
-	).filter((workspacePath) => !explicitWorkspacePathSet.has(workspacePath));
+	const restoredOnlyWorkspaceEntries = normalizeWorkspaceSessionEntries(
+		restoredWorkspaceEntries,
+	).filter((workspaceEntry) => {
+		if (workspaceEntry.kind === "directory" || workspaceEntry.kind === "path") {
+			return !explicitWorkspacePathSet.has(workspaceEntry.path);
+		}
+		return !workspaceEntry.sourceFilePaths.some((sourceFilePath) =>
+			explicitWorkspacePathSet.has(sourceFilePath),
+		);
+	});
 
-	return [...restoredOnlyWorkspacePaths, ...normalizedExplicitWorkspacePaths];
+	return [...restoredOnlyWorkspaceEntries, ...normalizedExplicitWorkspacePaths];
 }
 
-async function createMainWindow(workspacePath) {
+async function createMainWindow(workspaceRequest) {
 	const window = new BrowserWindow({
 		width: 1400,
 		height: 900,
@@ -229,8 +262,12 @@ async function createMainWindow(workspacePath) {
 				window.show();
 			}, 3000);
 
-	if (workspacePath !== undefined) {
-		await setWorkspaceFromPath(workspacePath, window, {
+	if (workspaceRequest !== undefined) {
+		const workspaceTarget =
+			workspaceRequest?.workspace && workspaceRequest?.pendingOpenFilePaths
+				? workspaceRequest
+				: (await resolveWorkspaceTargets([workspaceRequest]))[0];
+		await setWorkspaceFromTarget(workspaceTarget, window, {
 			afterChange: (workspace, changedWindow) =>
 				recordOpenWorkspacePath(changedWindow, workspace),
 		});
@@ -319,16 +356,18 @@ if (hasSingleInstanceLock) {
 		});
 		void captureAppOpened();
 		setupTelemetryHeartbeat();
-		const savedWorkspacePaths = await readWorkspaceSessionPaths(
+		const savedWorkspaceEntries = await readWorkspaceSessionEntries(
 			app.getPath("userData"),
 		);
-		const restorableSavedWorkspacePaths =
-			await filterExistingWorkspacePaths(savedWorkspacePaths);
-		if (restorableSavedWorkspacePaths.length !== savedWorkspacePaths.length) {
+		const restorableSavedWorkspaceEntries =
+			await filterExistingWorkspaceEntries(savedWorkspaceEntries);
+		if (
+			restorableSavedWorkspaceEntries.length !== savedWorkspaceEntries.length
+		) {
 			try {
-				writeWorkspaceSessionPathsSync(
+				writeWorkspaceSessionEntriesSync(
 					app.getPath("userData"),
-					restorableSavedWorkspacePaths,
+					restorableSavedWorkspaceEntries,
 				);
 			} catch (error) {
 				console.warn("Failed to clean Flashtype workspace session", error);
@@ -341,18 +380,16 @@ if (hasSingleInstanceLock) {
 				}),
 				process.cwd(),
 			),
-			...pendingWorkspaceOpenPaths,
+			...pendingWorkspaceOpenRequests,
 		]);
-		const workspacePathsToOpen = mergeRestoredAndExplicitWorkspacePaths(
-			restorableSavedWorkspacePaths,
+		const workspaceRequestsToOpen = mergeRestoredAndExplicitWorkspaceRequests(
+			restorableSavedWorkspaceEntries,
 			explicitWorkspacePaths,
 		);
-		pendingWorkspaceOpenPaths.length = 0;
+		pendingWorkspaceOpenRequests.length = 0;
 		readyForWorkspaceOpens = true;
-		if (workspacePathsToOpen.length > 0) {
-			for (const workspacePath of workspacePathsToOpen) {
-				await createMainWindow(workspacePath);
-			}
+		if (workspaceRequestsToOpen.length > 0) {
+			await openWorkspaceRequests(workspaceRequestsToOpen);
 		} else {
 			await createMainWindow();
 		}

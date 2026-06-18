@@ -48,8 +48,9 @@ test("updates when CSV file data changes in Lix", async () => {
 		});
 	} finally {
 		if (utils) {
+			const rendered = utils;
 			await act(async () => {
-				utils.unmount();
+				rendered.unmount();
 			});
 		}
 		await lix.close();

@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test, vi } from "vitest";
-import { resolveWorkspace, resolveWorkspaceTarget } from "./workspace.mjs";
+import {
+	resolveWorkspace,
+	resolveWorkspaceTarget,
+	resolveWorkspaceTargets,
+} from "./workspace.mjs";
 
 vi.mock("electron", () => ({
 	dialog: { showOpenDialog: vi.fn() },
@@ -65,7 +69,7 @@ describe("workspace resolution", () => {
 		});
 	});
 
-	test("resolves nested files to workspace-relative Lix paths", async () => {
+	test("resolves nested files to workspace-relative pending paths", async () => {
 		const directory = path.join(
 			tmpdir(),
 			"flashtype-workspace-test",
@@ -84,7 +88,7 @@ describe("workspace resolution", () => {
 				path: directory,
 				name: "workspace",
 			},
-			pendingOpenFilePath: "/docs/readme.md",
+			pendingOpenFilePaths: ["docs/readme.md"],
 		});
 	});
 
@@ -103,10 +107,145 @@ describe("workspace resolution", () => {
 			workspace: {
 				kind: "ephemeralFiles",
 				path: filePath,
+				representedPath: filePath,
+				baseDirectory: directory,
 				sourceFilePath: filePath,
+				sourceFilePaths: [filePath],
+				files: ["readme.md"],
 				name: "readme.md",
 			},
-			pendingOpenFilePath: "/readme.md",
+			pendingOpenFilePaths: ["readme.md"],
 		});
+	});
+
+	test("groups standalone markdown files into one ephemeral workspace target", async () => {
+		const directory = path.join(
+			tmpdir(),
+			"flashtype-workspace-test",
+			randomUUID(),
+			"workspace",
+		);
+		const firstPath = path.join(directory, "alpha.md");
+		const secondPath = path.join(directory, "nested", "beta.markdown");
+		await mkdir(path.dirname(secondPath), { recursive: true });
+		await writeFile(firstPath, "# Alpha\n");
+		await writeFile(secondPath, "# Beta\n");
+
+		await expect(
+			resolveWorkspaceTargets([firstPath, secondPath]),
+		).resolves.toEqual([
+			{
+				workspace: {
+					kind: "ephemeralFiles",
+					path: directory,
+					representedPath: directory,
+					baseDirectory: directory,
+					sourceFilePath: firstPath,
+					sourceFilePaths: [firstPath, secondPath],
+					files: ["alpha.md", "nested/beta.markdown"],
+					name: "2 Markdown files",
+				},
+				pendingOpenFilePaths: ["alpha.md", "nested/beta.markdown"],
+			},
+		]);
+	});
+
+	test("does not group markdown files inside Lix workspaces", async () => {
+		const firstDirectory = path.join(
+			tmpdir(),
+			"flashtype-workspace-test",
+			randomUUID(),
+			"first",
+		);
+		const secondDirectory = path.join(
+			tmpdir(),
+			"flashtype-workspace-test",
+			randomUUID(),
+			"second",
+		);
+		const firstPath = path.join(firstDirectory, "readme.md");
+		const secondPath = path.join(secondDirectory, "readme.md");
+		await mkdir(path.join(firstDirectory, ".lix", ".internal"), {
+			recursive: true,
+		});
+		await mkdir(path.join(secondDirectory, ".lix", ".internal"), {
+			recursive: true,
+		});
+		await writeFile(
+			path.join(firstDirectory, ".lix", ".internal", "db.sqlite"),
+			"",
+		);
+		await writeFile(
+			path.join(secondDirectory, ".lix", ".internal", "db.sqlite"),
+			"",
+		);
+		await writeFile(firstPath, "# First\n");
+		await writeFile(secondPath, "# Second\n");
+
+		await expect(
+			resolveWorkspaceTargets([firstPath, secondPath]),
+		).resolves.toEqual([
+			{
+				workspace: {
+					kind: "directory",
+					path: firstDirectory,
+					name: "first",
+				},
+				pendingOpenFilePaths: ["readme.md"],
+			},
+			{
+				workspace: {
+					kind: "directory",
+					path: secondDirectory,
+					name: "second",
+				},
+				pendingOpenFilePaths: ["readme.md"],
+			},
+		]);
+	});
+
+	test("does not group non-markdown standalone files", async () => {
+		const directory = path.join(
+			tmpdir(),
+			"flashtype-workspace-test",
+			randomUUID(),
+			"workspace",
+		);
+		const firstPath = path.join(directory, "alpha.txt");
+		const secondPath = path.join(directory, "beta.csv");
+		await mkdir(directory, { recursive: true });
+		await writeFile(firstPath, "Alpha\n");
+		await writeFile(secondPath, "Beta\n");
+
+		await expect(
+			resolveWorkspaceTargets([firstPath, secondPath]),
+		).resolves.toEqual([
+			{
+				workspace: {
+					kind: "ephemeralFiles",
+					path: firstPath,
+					representedPath: firstPath,
+					baseDirectory: directory,
+					sourceFilePath: firstPath,
+					sourceFilePaths: [firstPath],
+					files: ["alpha.txt"],
+					name: "alpha.txt",
+				},
+				pendingOpenFilePaths: ["alpha.txt"],
+			},
+			{
+				workspace: {
+					kind: "ephemeralFiles",
+					path: secondPath,
+					representedPath: secondPath,
+					baseDirectory: directory,
+					sourceFilePath: secondPath,
+					sourceFilePaths: [secondPath],
+					files: ["beta.csv"],
+					name: "beta.csv",
+				},
+				pendingOpenFilePaths: ["beta.csv"],
+			},
+		]);
 	});
 });

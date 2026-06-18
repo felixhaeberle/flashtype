@@ -199,8 +199,7 @@ const DEFAULT_PANEL_FALLBACK_SIZES = {
 };
 const MIN_UNCOLLAPSED_RIGHT_SIZE = 35;
 const MIN_VISIBLE_PANEL_SIZE = 1;
-const INSTALLED_EXTENSION_PATH_PREFIX =
-	"/.lix/app_data/flashtype/extensions/";
+const INSTALLED_EXTENSION_PATH_PREFIX = "/.lix/app_data/flashtype/extensions/";
 const INSTALLED_EXTENSION_PATH_PREFIX_UPPER_BOUND =
 	"/.lix/app_data/flashtype/extensions0";
 const INSTALLED_EXTENSION_OBSERVE_SQL =
@@ -254,7 +253,7 @@ async function resolveNextUntitledMarkdownPath(
 export function V2LayoutShell({
 	workspaceName,
 	onOpenWorkspace,
-	pendingOpenFilePath,
+	pendingOpenFilePaths,
 	onPendingOpenFileHandled,
 	onError,
 	isUpdateReady,
@@ -262,7 +261,7 @@ export function V2LayoutShell({
 }: {
 	readonly workspaceName?: string;
 	readonly onOpenWorkspace?: () => void;
-	readonly pendingOpenFilePath?: string | null;
+	readonly pendingOpenFilePaths?: readonly string[];
 	readonly onPendingOpenFileHandled?: (filePath: string) => void;
 	readonly onError?: (error: unknown) => void;
 	readonly isUpdateReady?: boolean;
@@ -274,7 +273,7 @@ export function V2LayoutShell({
 				<LayoutShellContent
 					workspaceName={workspaceName}
 					onOpenWorkspace={onOpenWorkspace}
-					pendingOpenFilePath={pendingOpenFilePath}
+					pendingOpenFilePaths={pendingOpenFilePaths}
 					onPendingOpenFileHandled={onPendingOpenFileHandled}
 					onError={onError}
 					isUpdateReady={isUpdateReady}
@@ -329,7 +328,7 @@ function isPanelShortcutBlockedTarget(target: EventTarget | null): boolean {
 function LayoutShellContent({
 	workspaceName,
 	onOpenWorkspace,
-	pendingOpenFilePath,
+	pendingOpenFilePaths,
 	onPendingOpenFileHandled,
 	onError,
 	isUpdateReady,
@@ -337,7 +336,7 @@ function LayoutShellContent({
 }: {
 	readonly workspaceName?: string;
 	readonly onOpenWorkspace?: () => void;
-	readonly pendingOpenFilePath?: string | null;
+	readonly pendingOpenFilePaths?: readonly string[];
 	readonly onPendingOpenFileHandled?: (filePath: string) => void;
 	readonly onError?: (error: unknown) => void;
 	readonly isUpdateReady?: boolean;
@@ -867,27 +866,47 @@ function LayoutShellContent({
 	);
 
 	useEffect(() => {
-		if (!pendingOpenFilePath) return;
+		if (!pendingOpenFilePaths || pendingOpenFilePaths.length === 0) return;
 		let cancelled = false;
 		(async () => {
-			const file = await qb(lix)
-				.selectFrom("lix_file")
-				.select(["id", "path"])
-				.where("path", "=", pendingOpenFilePath)
-				.executeTakeFirst();
-			if (cancelled) return;
-			if (!file) {
-				throw new Error(
-					`File not found in the opened workspace: ${pendingOpenFilePath}`,
-				);
+			const openedFiles: Array<{ id: string; path: string }> = [];
+			const handledFilePaths: string[] = [];
+			for (const pendingOpenFilePath of pendingOpenFilePaths) {
+				const lixLookupPath = `/${pendingOpenFilePath}`;
+				const file = await qb(lix)
+					.selectFrom("lix_file")
+					.select(["id", "path"])
+					.where("path", "=", lixLookupPath)
+					.executeTakeFirst();
+				if (cancelled) return;
+				if (!file) {
+					throw new Error(
+						`File not found in the opened workspace: ${pendingOpenFilePath}`,
+					);
+				}
+				handleOpenFile({
+					panel: "central",
+					fileId: file.id as string,
+					filePath: file.path as string,
+					focus: false,
+				});
+				openedFiles.push({ id: file.id as string, path: file.path as string });
+				handledFilePaths.push(pendingOpenFilePath);
 			}
-			handleOpenFile({
-				panel: "central",
-				fileId: file.id as string,
-				filePath: file.path as string,
-				focus: true,
-			});
-			onPendingOpenFileHandled?.(pendingOpenFilePath);
+			const firstFile = openedFiles[0];
+			if (!cancelled && firstFile) {
+				handleOpenFile({
+					panel: "central",
+					fileId: firstFile.id,
+					filePath: firstFile.path,
+					focus: true,
+				});
+			}
+			if (!cancelled) {
+				for (const handledFilePath of handledFilePaths) {
+					onPendingOpenFileHandled?.(handledFilePath);
+				}
+			}
 		})().catch((error: unknown) => {
 			if (!cancelled) {
 				onError?.(error);
@@ -901,7 +920,7 @@ function LayoutShellContent({
 		lix,
 		onError,
 		onPendingOpenFileHandled,
-		pendingOpenFilePath,
+		pendingOpenFilePaths,
 	]);
 
 	const clearExternalWriteReview = useCallback(

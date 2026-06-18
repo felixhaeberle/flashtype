@@ -3,60 +3,155 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 export const WORKSPACE_SESSION_FILE = "workspace-session.json";
-export const WORKSPACE_SESSION_VERSION = 1;
+export const WORKSPACE_SESSION_VERSION = 2;
 
-export async function readWorkspaceSessionPaths(userDataPath) {
+export async function readWorkspaceSessionEntries(userDataPath) {
 	try {
 		const rawStore = await fs.readFile(getWorkspaceSessionPath(userDataPath), {
 			encoding: "utf8",
 		});
 		const store = JSON.parse(rawStore);
 		if (
-			store?.version !== WORKSPACE_SESSION_VERSION ||
-			!Array.isArray(store.workspacePaths)
+			store?.version === WORKSPACE_SESSION_VERSION &&
+			Array.isArray(store.workspaces)
 		) {
-			return [];
+			return normalizeWorkspaceSessionEntries(store.workspaces);
 		}
-		return normalizeWorkspacePaths(store.workspacePaths);
+		if (store?.version === 1 && Array.isArray(store.workspacePaths)) {
+			return normalizeWorkspacePaths(store.workspacePaths).map(
+				(workspacePath) => ({
+					kind: "path",
+					path: workspacePath,
+				}),
+			);
+		}
+		return [];
 	} catch {
 		return [];
 	}
 }
 
-export async function writeWorkspaceSessionPaths(
+export async function writeWorkspaceSessionEntries(
 	userDataPath,
-	workspacePaths,
+	workspaceEntries,
 ) {
 	await fs.mkdir(userDataPath, { recursive: true });
 	await fs.writeFile(
 		getWorkspaceSessionPath(userDataPath),
-		serializeWorkspaceSessionPaths(workspacePaths),
+		serializeWorkspaceSessionEntries(workspaceEntries),
 		"utf8",
 	);
 }
 
-export function writeWorkspaceSessionPathsSync(userDataPath, workspacePaths) {
+export function writeWorkspaceSessionEntriesSync(
+	userDataPath,
+	workspaceEntries,
+) {
 	mkdirSync(userDataPath, { recursive: true });
 	writeFileSync(
 		getWorkspaceSessionPath(userDataPath),
-		serializeWorkspaceSessionPaths(workspacePaths),
+		serializeWorkspaceSessionEntries(workspaceEntries),
 		"utf8",
 	);
 }
 
-export async function filterExistingWorkspacePaths(workspacePaths) {
-	const existingWorkspacePaths = [];
-	for (const workspacePath of normalizeWorkspacePaths(workspacePaths)) {
-		try {
-			const stats = await fs.stat(workspacePath);
-			if (stats.isDirectory() || stats.isFile()) {
-				existingWorkspacePaths.push(workspacePath);
+export async function filterExistingWorkspaceEntries(workspaceEntries) {
+	const existingWorkspaceEntries = [];
+	for (const workspaceEntry of normalizeWorkspaceSessionEntries(
+		workspaceEntries,
+	)) {
+		if (workspaceEntry.kind === "directory") {
+			try {
+				if ((await fs.stat(workspaceEntry.path)).isDirectory()) {
+					existingWorkspaceEntries.push(workspaceEntry);
+				}
+			} catch {
+				// Ignore stale saved paths; explicit launch paths are handled elsewhere.
 			}
-		} catch {
-			// Ignore stale saved paths; explicit launch paths are handled elsewhere.
+			continue;
+		}
+
+		if (workspaceEntry.kind === "ephemeralFiles") {
+			const sourceFilePaths = [];
+			for (const sourceFilePath of workspaceEntry.sourceFilePaths) {
+				try {
+					if ((await fs.stat(sourceFilePath)).isFile()) {
+						sourceFilePaths.push(sourceFilePath);
+					}
+				} catch {
+					// Drop missing files from a restored ephemeral workspace.
+				}
+			}
+			if (sourceFilePaths.length > 0) {
+				existingWorkspaceEntries.push({
+					kind: "ephemeralFiles",
+					sourceFilePaths,
+				});
+			}
+			continue;
+		}
+
+		if (workspaceEntry.kind === "path") {
+			try {
+				const stats = await fs.stat(workspaceEntry.path);
+				if (stats.isDirectory() || stats.isFile()) {
+					existingWorkspaceEntries.push(workspaceEntry);
+				}
+			} catch {
+				// Ignore stale v1 paths.
+			}
 		}
 	}
-	return existingWorkspacePaths;
+	return existingWorkspaceEntries;
+}
+
+export function workspaceToSessionEntry(workspace) {
+	if (!workspace) {
+		return null;
+	}
+	if (workspace.kind === "directory") {
+		return {
+			kind: "directory",
+			path: path.resolve(workspace.path),
+		};
+	}
+	if (workspace.kind === "ephemeralFiles") {
+		const sourceFilePaths = normalizeWorkspacePaths(
+			workspace.sourceFilePaths ??
+				(workspace.sourceFilePath ? [workspace.sourceFilePath] : []),
+		);
+		if (sourceFilePaths.length === 0) {
+			return null;
+		}
+		return {
+			kind: "ephemeralFiles",
+			sourceFilePaths,
+		};
+	}
+	return null;
+}
+
+export function normalizeWorkspaceSessionEntries(workspaceEntries) {
+	if (!Array.isArray(workspaceEntries)) {
+		return [];
+	}
+
+	const seen = new Set();
+	const normalizedWorkspaceEntries = [];
+	for (const workspaceEntry of workspaceEntries) {
+		const normalizedWorkspaceEntry =
+			normalizeWorkspaceSessionEntry(workspaceEntry);
+		if (!normalizedWorkspaceEntry) {
+			continue;
+		}
+		const key = workspaceSessionEntryKey(normalizedWorkspaceEntry);
+		if (seen.has(key)) {
+			continue;
+		}
+		seen.add(key);
+		normalizedWorkspaceEntries.push(normalizedWorkspaceEntry);
+	}
+	return normalizedWorkspaceEntries;
 }
 
 export function normalizeWorkspacePaths(workspacePaths) {
@@ -84,13 +179,100 @@ export function getWorkspaceSessionPath(userDataPath) {
 	return path.join(userDataPath, WORKSPACE_SESSION_FILE);
 }
 
-function serializeWorkspaceSessionPaths(workspacePaths) {
+function normalizeWorkspaceSessionEntry(workspaceEntry) {
+	if (!workspaceEntry || typeof workspaceEntry !== "object") {
+		return null;
+	}
+	if (
+		workspaceEntry.kind === "directory" &&
+		typeof workspaceEntry.path === "string" &&
+		workspaceEntry.path.length > 0
+	) {
+		return {
+			kind: "directory",
+			path: path.resolve(workspaceEntry.path),
+		};
+	}
+	if (workspaceEntry.kind === "ephemeralFiles") {
+		const sourceFilePaths = normalizeWorkspacePaths(
+			workspaceEntry.sourceFilePaths,
+		);
+		if (sourceFilePaths.length === 0) {
+			return null;
+		}
+		return {
+			kind: "ephemeralFiles",
+			sourceFilePaths,
+		};
+	}
+	if (
+		workspaceEntry.kind === "path" &&
+		typeof workspaceEntry.path === "string" &&
+		workspaceEntry.path.length > 0
+	) {
+		return {
+			kind: "path",
+			path: path.resolve(workspaceEntry.path),
+		};
+	}
+	return null;
+}
+
+function workspaceSessionEntryKey(workspaceEntry) {
+	if (workspaceEntry.kind === "ephemeralFiles") {
+		return `${workspaceEntry.kind}:${workspaceEntry.sourceFilePaths.join("\0")}`;
+	}
+	return `${workspaceEntry.kind}:${workspaceEntry.path}`;
+}
+
+function serializeWorkspaceSessionEntries(workspaceEntries) {
 	return `${JSON.stringify(
 		{
 			version: WORKSPACE_SESSION_VERSION,
-			workspacePaths: normalizeWorkspacePaths(workspacePaths),
+			workspaces: normalizeWorkspaceSessionEntries(workspaceEntries).filter(
+				(workspaceEntry) => workspaceEntry.kind !== "path",
+			),
 		},
 		null,
 		2,
 	)}\n`;
+}
+
+// Backwards-compatible aliases for older callers/tests.
+export async function readWorkspaceSessionPaths(userDataPath) {
+	return (await readWorkspaceSessionEntries(userDataPath))
+		.filter((workspaceEntry) => workspaceEntry.kind === "path")
+		.map((workspaceEntry) => workspaceEntry.path);
+}
+
+export async function writeWorkspaceSessionPaths(userDataPath, workspacePaths) {
+	await writeWorkspaceSessionEntries(
+		userDataPath,
+		normalizeWorkspacePaths(workspacePaths).map((workspacePath) => ({
+			kind: "directory",
+			path: workspacePath,
+		})),
+	);
+}
+
+export function writeWorkspaceSessionPathsSync(userDataPath, workspacePaths) {
+	writeWorkspaceSessionEntriesSync(
+		userDataPath,
+		normalizeWorkspacePaths(workspacePaths).map((workspacePath) => ({
+			kind: "directory",
+			path: workspacePath,
+		})),
+	);
+}
+
+export async function filterExistingWorkspacePaths(workspacePaths) {
+	const entries = await filterExistingWorkspaceEntries(
+		normalizeWorkspacePaths(workspacePaths).map((workspacePath) => ({
+			kind: "path",
+			path: workspacePath,
+		})),
+	);
+	return entries
+		.filter((workspaceEntry) => workspaceEntry.kind === "path")
+		.map((workspaceEntry) => workspaceEntry.path);
 }

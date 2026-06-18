@@ -4,44 +4,52 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import {
-	filterExistingWorkspacePaths,
+	filterExistingWorkspaceEntries,
 	getWorkspaceSessionPath,
-	readWorkspaceSessionPaths,
-	writeWorkspaceSessionPaths,
-	writeWorkspaceSessionPathsSync,
+	readWorkspaceSessionEntries,
+	writeWorkspaceSessionEntries,
+	writeWorkspaceSessionEntriesSync,
 	WORKSPACE_SESSION_VERSION,
 } from "./workspace-session.mjs";
 
 describe("workspace session store", () => {
-	test("missing store returns no workspace paths", async () => {
+	test("missing store returns no workspace entries", async () => {
 		const userDataPath = createUserDataPath();
 
-		await expect(readWorkspaceSessionPaths(userDataPath)).resolves.toEqual([]);
+		await expect(readWorkspaceSessionEntries(userDataPath)).resolves.toEqual(
+			[],
+		);
 	});
 
-	test("corrupt or invalid stores return no workspace paths", async () => {
+	test("corrupt or invalid stores return no workspace entries", async () => {
 		const userDataPath = createUserDataPath();
 		await mkdir(userDataPath, { recursive: true });
 
 		await writeFile(getWorkspaceSessionPath(userDataPath), "{bad json", "utf8");
-		await expect(readWorkspaceSessionPaths(userDataPath)).resolves.toEqual([]);
+		await expect(readWorkspaceSessionEntries(userDataPath)).resolves.toEqual(
+			[],
+		);
 
 		await writeFile(
 			getWorkspaceSessionPath(userDataPath),
 			JSON.stringify({ version: WORKSPACE_SESSION_VERSION }),
 			"utf8",
 		);
-		await expect(readWorkspaceSessionPaths(userDataPath)).resolves.toEqual([]);
+		await expect(readWorkspaceSessionEntries(userDataPath)).resolves.toEqual(
+			[],
+		);
 
 		await writeFile(
 			getWorkspaceSessionPath(userDataPath),
 			JSON.stringify({ version: 999, workspacePaths: ["/tmp/workspace"] }),
 			"utf8",
 		);
-		await expect(readWorkspaceSessionPaths(userDataPath)).resolves.toEqual([]);
+		await expect(readWorkspaceSessionEntries(userDataPath)).resolves.toEqual(
+			[],
+		);
 	});
 
-	test("read ignores non-string paths and dedupes resolved paths", async () => {
+	test("migrates v1 path stores to path entries", async () => {
 		const userDataPath = createUserDataPath();
 		const firstWorkspacePath = path.join(userDataPath, "first-workspace");
 		const secondWorkspacePath = path.join(userDataPath, "second-workspace");
@@ -49,12 +57,16 @@ describe("workspace session store", () => {
 		await writeFile(
 			getWorkspaceSessionPath(userDataPath),
 			JSON.stringify({
-				version: WORKSPACE_SESSION_VERSION,
+				version: 1,
 				workspacePaths: [
 					firstWorkspacePath,
 					123,
 					"",
-					path.join(firstWorkspacePath, "..", path.basename(firstWorkspacePath)),
+					path.join(
+						firstWorkspacePath,
+						"..",
+						path.basename(firstWorkspacePath),
+					),
 					secondWorkspacePath,
 					null,
 				],
@@ -62,55 +74,78 @@ describe("workspace session store", () => {
 			"utf8",
 		);
 
-		await expect(readWorkspaceSessionPaths(userDataPath)).resolves.toEqual([
-			firstWorkspacePath,
-			secondWorkspacePath,
+		await expect(readWorkspaceSessionEntries(userDataPath)).resolves.toEqual([
+			{ kind: "path", path: firstWorkspacePath },
+			{ kind: "path", path: secondWorkspacePath },
 		]);
 	});
 
-	test("write persists normalized workspace paths", async () => {
+	test("write persists normalized workspace entries", async () => {
 		const userDataPath = createUserDataPath();
 		const workspacePath = path.join(userDataPath, "workspace");
+		const firstFilePath = path.join(userDataPath, "files", "one.md");
+		const secondFilePath = path.join(userDataPath, "files", "two.md");
 
-		await writeWorkspaceSessionPaths(userDataPath, [
-			workspacePath,
-			workspacePath,
+		await writeWorkspaceSessionEntries(userDataPath, [
+			{ kind: "directory", path: workspacePath },
+			{ kind: "directory", path: workspacePath },
+			{
+				kind: "ephemeralFiles",
+				sourceFilePaths: [firstFilePath, secondFilePath, firstFilePath],
+			},
 		]);
 
 		await expect(readStore(userDataPath)).resolves.toEqual({
 			version: WORKSPACE_SESSION_VERSION,
-			workspacePaths: [workspacePath],
+			workspaces: [
+				{ kind: "directory", path: workspacePath },
+				{
+					kind: "ephemeralFiles",
+					sourceFilePaths: [firstFilePath, secondFilePath],
+				},
+			],
 		});
 	});
 
-	test("sync write persists normalized workspace paths", async () => {
+	test("sync write persists normalized workspace entries", async () => {
 		const userDataPath = createUserDataPath();
 		const workspacePath = path.join(userDataPath, "workspace");
 
-		writeWorkspaceSessionPathsSync(userDataPath, [workspacePath]);
+		writeWorkspaceSessionEntriesSync(userDataPath, [
+			{ kind: "directory", path: workspacePath },
+		]);
 
 		await expect(readStore(userDataPath)).resolves.toEqual({
 			version: WORKSPACE_SESSION_VERSION,
-			workspacePaths: [workspacePath],
+			workspaces: [{ kind: "directory", path: workspacePath }],
 		});
 	});
 
-	test("filters stale workspace paths", async () => {
+	test("filters stale workspace entries", async () => {
 		const userDataPath = createUserDataPath();
 		const directoryWorkspacePath = path.join(userDataPath, "directory");
-		const fileWorkspacePath = path.join(userDataPath, "solo.md");
+		const firstFilePath = path.join(userDataPath, "one.md");
+		const secondFilePath = path.join(userDataPath, "two.md");
 		const staleWorkspacePath = path.join(userDataPath, "missing");
 		await mkdir(directoryWorkspacePath, { recursive: true });
 		await mkdir(userDataPath, { recursive: true });
-		await writeFile(fileWorkspacePath, "# Solo\n", "utf8");
+		await writeFile(firstFilePath, "# One\n", "utf8");
 
 		await expect(
-			filterExistingWorkspacePaths([
-				directoryWorkspacePath,
-				staleWorkspacePath,
-				fileWorkspacePath,
+			filterExistingWorkspaceEntries([
+				{ kind: "directory", path: directoryWorkspacePath },
+				{ kind: "directory", path: staleWorkspacePath },
+				{
+					kind: "ephemeralFiles",
+					sourceFilePaths: [firstFilePath, secondFilePath],
+				},
+				{ kind: "path", path: firstFilePath },
 			]),
-		).resolves.toEqual([directoryWorkspacePath, fileWorkspacePath]);
+		).resolves.toEqual([
+			{ kind: "directory", path: directoryWorkspacePath },
+			{ kind: "ephemeralFiles", sourceFilePaths: [firstFilePath] },
+			{ kind: "path", path: firstFilePath },
+		]);
 	});
 });
 
@@ -119,5 +154,7 @@ function createUserDataPath() {
 }
 
 async function readStore(userDataPath: string): Promise<unknown> {
-	return JSON.parse(await readFile(getWorkspaceSessionPath(userDataPath), "utf8"));
+	return JSON.parse(
+		await readFile(getWorkspaceSessionPath(userDataPath), "utf8"),
+	);
 }

@@ -387,6 +387,142 @@ test("macOS open-file events open standalone files as ephemeral single-file work
 	}
 });
 
+test("launching with multiple standalone markdown files creates one ephemeral workspace", async ({
+	browserName: _browserName,
+}, testInfo) => {
+	const directory = testInfo.outputPath("standalone-markdown");
+	const firstPath = path.join(directory, "alpha.md");
+	const secondPath = path.join(directory, "beta.markdown");
+	const siblingPath = path.join(directory, "sibling.md");
+
+	let electronApp: ElectronApplication | undefined;
+	try {
+		await mkdir(directory, { recursive: true });
+		await writeFile(firstPath, "# Alpha\n");
+		await writeFile(secondPath, "# Beta\n");
+		await writeFile(siblingPath, "# Sibling\n");
+
+		electronApp = await launchDevElectronAppWithArgs([firstPath, secondPath]);
+		const page = await pageWithTitle(electronApp, "2 Markdown files");
+		registerRendererConsoleLogging(page);
+
+		await expectWindowCount(electronApp, 1);
+		await expect(page.getByRole("heading", { name: "Alpha" })).toBeVisible();
+		await expect(page.getByText("beta.markdown")).toBeVisible();
+		await expect(page.getByText("sibling.md")).toHaveCount(0);
+		await expectPathMissing(path.join(directory, ".lix"));
+		await expectPathMissing(path.join(directory, ".lix_system"));
+	} finally {
+		await closeElectronApp(electronApp);
+	}
+});
+
+test("macOS open-file events group standalone markdown files", async ({
+	browserName: _browserName,
+}, testInfo) => {
+	const directory = testInfo.outputPath("standalone-open-file-markdown");
+	const firstPath = path.join(directory, "first.md");
+	const secondPath = path.join(directory, "second.md");
+
+	let electronApp: ElectronApplication | undefined;
+	try {
+		await mkdir(directory, { recursive: true });
+		await writeFile(firstPath, "# First\n");
+		await writeFile(secondPath, "# Second\n");
+
+		electronApp = await launchDevElectronAppWithArgs([]);
+		const firstRunPage = await electronApp.firstWindow();
+		registerRendererConsoleLogging(firstRunPage);
+
+		await emitOpenFiles(electronApp, [firstPath, secondPath]);
+		const filePage = await pageWithTitle(electronApp, "2 Markdown files");
+		registerRendererConsoleLogging(filePage);
+
+		await expectWindowCount(electronApp, 2);
+		await expect(firstRunPage).toHaveTitle("Flashtype");
+		await expect(
+			filePage.getByRole("heading", { name: "First" }),
+		).toBeVisible();
+		await expect(filePage.getByText("second.md")).toBeVisible();
+	} finally {
+		await closeElectronApp(electronApp);
+	}
+});
+
+test("mixed folder and standalone markdown args create folder and grouped file windows", async ({
+	browserName: _browserName,
+}, testInfo) => {
+	const folderWorkspaceDir = testInfo.outputPath("folder-workspace");
+	const markdownDir = testInfo.outputPath("standalone-mixed-markdown");
+	const firstPath = path.join(markdownDir, "one.md");
+	const secondPath = path.join(markdownDir, "two.md");
+
+	let electronApp: ElectronApplication | undefined;
+	try {
+		await writeMarkerFile(folderWorkspaceDir, "folder-marker.md");
+		await mkdir(markdownDir, { recursive: true });
+		await writeFile(firstPath, "# One\n");
+		await writeFile(secondPath, "# Two\n");
+
+		electronApp = await launchDevElectronAppWithArgs([
+			folderWorkspaceDir,
+			firstPath,
+			secondPath,
+		]);
+		const folderPage = await pageWithTitle(
+			electronApp,
+			path.basename(folderWorkspaceDir),
+		);
+		const filePage = await pageWithTitle(electronApp, "2 Markdown files");
+		registerRendererConsoleLogging(folderPage);
+		registerRendererConsoleLogging(filePage);
+
+		await expectWindowCount(electronApp, 2);
+		await expect(folderPage.getByText("folder-marker.md")).toBeVisible();
+		await expect(filePage.getByRole("heading", { name: "One" })).toBeVisible();
+		await expect(filePage.getByText("two.md")).toBeVisible();
+	} finally {
+		await closeElectronApp(electronApp);
+	}
+});
+
+test("relaunch restores grouped ephemeral file workspaces", async ({
+	browserName: _browserName,
+}, testInfo) => {
+	const userDataDir = testInfo.outputPath("user-data");
+	const directory = testInfo.outputPath("restore-markdown");
+	const firstPath = path.join(directory, "first.md");
+	const secondPath = path.join(directory, "second.md");
+
+	let electronApp: ElectronApplication | undefined;
+	try {
+		await mkdir(directory, { recursive: true });
+		await writeFile(firstPath, "# First\n");
+		await writeFile(secondPath, "# Second\n");
+
+		electronApp = await launchDevElectronAppWithArgs([firstPath, secondPath], {
+			userDataDir,
+		});
+		await pageWithTitle(electronApp, "2 Markdown files");
+		await expectWindowCount(electronApp, 1);
+
+		await closeElectronApp(electronApp);
+		electronApp = undefined;
+
+		electronApp = await launchDevElectronAppWithArgs([], { userDataDir });
+		const restoredPage = await pageWithTitle(electronApp, "2 Markdown files");
+		registerRendererConsoleLogging(restoredPage);
+
+		await expectWindowCount(electronApp, 1);
+		await expect(
+			restoredPage.getByRole("heading", { name: "First" }),
+		).toBeVisible();
+		await expect(restoredPage.getByText("second.md")).toBeVisible();
+	} finally {
+		await closeElectronApp(electronApp);
+	}
+});
+
 async function writeMarkerFile(
 	workspaceDir: string,
 	fileName: string,
@@ -414,6 +550,23 @@ async function emitOpenFile(
 			openedPath,
 		);
 	}, filePath);
+}
+
+async function emitOpenFiles(
+	electronApp: ElectronApplication,
+	filePaths: string[],
+): Promise<void> {
+	await electronApp.evaluate(({ app }, openedPaths) => {
+		for (const openedPath of openedPaths) {
+			app.emit(
+				"open-file",
+				{
+					preventDefault() {},
+				},
+				openedPath,
+			);
+		}
+	}, filePaths);
 }
 
 async function pageWithTitle(
@@ -497,7 +650,14 @@ async function expectWorkspaceSessionPaths(
 				const store = JSON.parse(
 					await readFile(workspaceSessionPath(userDataDir), "utf8"),
 				);
-				return store.workspacePaths;
+				if (Array.isArray(store.workspacePaths)) {
+					return store.workspacePaths;
+				}
+				return Array.isArray(store.workspaces)
+					? store.workspaces
+							.filter((workspace: any) => workspace.kind === "directory")
+							.map((workspace: any) => workspace.path)
+					: null;
 			} catch {
 				return null;
 			}

@@ -24,16 +24,18 @@ export async function ensureLixOpen(window) {
 					);
 				}
 				const isEphemeralFiles = workspace.kind === "ephemeralFiles";
-				const sourceFilePath = workspace.sourceFilePath ?? workspace.path;
 				const nativeLix = await openLix({
 					backend: isEphemeralFiles
-						? new FilesBackend({ path: sourceFilePath })
+						? new FilesBackend({
+								root: workspace.baseDirectory,
+								files: workspace.files,
+							})
 						: new FsBackend({ path: workspace.path }),
 				});
 				await ensureDefaultPluginsInstalledOnCurrentBranch(nativeLix);
 				return createDesktopLixHandle(
 					nativeLix,
-					isEphemeralFiles ? path.dirname(sourceFilePath) : workspace.path,
+					isEphemeralFiles ? workspace.baseDirectory : workspace.path,
 				);
 			})();
 			session.lixPromise = openingPromise;

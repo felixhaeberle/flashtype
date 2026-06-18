@@ -29,8 +29,8 @@ export const AppRoot = () => {
 	// undefined = still asking the main process; null = first run.
 	const [workspace, setWorkspace] = useState<Workspace | undefined>(undefined);
 	const [lix, setLix] = useState<Lix | null>(null);
-	const [pendingOpenFilePath, setPendingOpenFilePath] = useState<string | null>(
-		null,
+	const [pendingOpenFilePaths, setPendingOpenFilePaths] = useState<string[]>(
+		[],
 	);
 	const [error, setError] = useState<unknown>(null);
 	const [isUpdateReady, setIsUpdateReady] = useState(false);
@@ -152,11 +152,11 @@ export const AppRoot = () => {
 		let cancelled = false;
 		(async () => {
 			try {
-				const filePath =
-					(await window.flashtypeDesktop?.workspace.consumePendingOpenFile()) ??
-					null;
-				if (!cancelled && filePath) {
-					setPendingOpenFilePath(filePath);
+				const filePaths =
+					(await window.flashtypeDesktop?.workspace.consumePendingOpenFiles()) ??
+					[];
+				if (!cancelled && filePaths.length > 0) {
+					setPendingOpenFilePaths(filePaths);
 				}
 			} catch (e) {
 				if (!cancelled) setError(e);
@@ -168,8 +168,8 @@ export const AppRoot = () => {
 	}, [lix, workspace]);
 
 	const handlePendingOpenFileHandled = useCallback((filePath: string) => {
-		setPendingOpenFilePath((current) =>
-			current === filePath ? null : current,
+		setPendingOpenFilePaths((current) =>
+			current.filter((pendingFilePath) => pendingFilePath !== filePath),
 		);
 	}, []);
 
@@ -192,7 +192,7 @@ export const AppRoot = () => {
 					<V2LayoutShell
 						workspaceName={workspace.name}
 						onOpenWorkspace={handleOpenFolder}
-						pendingOpenFilePath={pendingOpenFilePath}
+						pendingOpenFilePaths={pendingOpenFilePaths}
 						onPendingOpenFileHandled={handlePendingOpenFileHandled}
 						onError={setError}
 						isUpdateReady={isUpdateReady}
