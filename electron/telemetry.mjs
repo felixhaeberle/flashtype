@@ -8,7 +8,7 @@ const ENV_VARIABLES_FILE = "build/env-variables.mjs";
 const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
 const POSTHOG_CAPTURE_ENDPOINT = "/capture/";
 
-export async function captureAppOpened() {
+export async function captureAppOpened({ trigger = "launch" } = {}) {
 	if (!app.isPackaged) {
 		return;
 	}
@@ -28,6 +28,8 @@ export async function captureAppOpened() {
 				app_version: env.APP_VERSION ?? app.getVersion(),
 				platform: process.platform,
 				is_packaged: app.isPackaged,
+				trigger,
+				uptime_seconds: Math.floor(process.uptime()),
 			},
 		};
 

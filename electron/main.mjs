@@ -25,6 +25,8 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const execFileAsync = promisify(execFile);
 const AUTO_UPDATE_CHECK_DELAY_MS = 10_000;
+const AUTO_UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const TELEMETRY_HEARTBEAT_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const DEV_SERVER_URL =
 	process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:4173";
 const workspaceWindows = new Set();
@@ -39,6 +41,7 @@ let pendingManualUpdateCheck = false;
 let updateWindow = null;
 let updateWindowCloseTimer = null;
 let updateIconDataUrl = null;
+let telemetryHeartbeatInterval = null;
 
 app.setName(APP_NAME);
 app.setAboutPanelOptions({
@@ -228,6 +231,7 @@ if (hasSingleInstanceLock) {
 			);
 		});
 		void captureAppOpened();
+		setupTelemetryHeartbeat();
 		const workspacePathsToOpen = [
 			...getWorkspacePathArguments(process.argv, {
 				defaultApp: process.defaultApp === true,
@@ -277,9 +281,32 @@ async function setupAutoUpdates() {
 		setTimeout(() => {
 			void checkForUpdates(autoUpdater);
 		}, AUTO_UPDATE_CHECK_DELAY_MS);
+		setInterval(() => {
+			if (updateInstallReady) {
+				return;
+			}
+			void checkForUpdates(autoUpdater);
+		}, AUTO_UPDATE_CHECK_INTERVAL_MS);
 	} catch (error) {
 		console.warn("Failed to initialize Flashtype auto updates", error);
 	}
+}
+
+function setupTelemetryHeartbeat() {
+	if (!app.isPackaged || telemetryHeartbeatInterval !== null) {
+		return;
+	}
+	telemetryHeartbeatInterval = setInterval(() => {
+		if (!hasFocusedWorkspaceWindow()) {
+			return;
+		}
+		void captureAppOpened({ trigger: "heartbeat" });
+	}, TELEMETRY_HEARTBEAT_INTERVAL_MS);
+}
+
+function hasFocusedWorkspaceWindow() {
+	const focusedWindow = BrowserWindow.getFocusedWindow();
+	return Boolean(focusedWindow && workspaceWindows.has(focusedWindow));
 }
 
 function canUseAutoUpdates() {
