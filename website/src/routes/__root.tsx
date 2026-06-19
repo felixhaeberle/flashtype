@@ -2,11 +2,13 @@ import {
 	createRootRoute,
 	HeadContent,
 	Scripts,
+	useRouter,
 } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { GITHUB_LATEST_RELEASE_URL, GITHUB_URL } from "../download";
 import appCss from "../styles.css?url";
 
+const GA_MEASUREMENT_ID = "G-1M7SY9LBT7";
 const siteUrl = "https://flashtype.com/";
 const title = "Flashtype | The markdown editor for Claude & Codex";
 const description =
@@ -80,6 +82,23 @@ const structuredData = {
 		},
 	],
 };
+const googleAnalyticsScripts = import.meta.env.PROD
+	? [
+			{
+				async: true,
+				src: `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`,
+			},
+			{
+				children: `
+					window.dataLayer = window.dataLayer || [];
+					function gtag(){window.dataLayer.push(arguments);}
+					window.gtag = gtag;
+					gtag('js', new Date());
+					gtag('config', '${GA_MEASUREMENT_ID}', { send_page_view: false });
+				`,
+			},
+		]
+	: [];
 
 export const Route = createRootRoute({
 	head: () => ({
@@ -121,9 +140,49 @@ export const Route = createRootRoute({
 				href: "https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..900&family=JetBrains+Mono:wght@400;500;600&display=swap",
 			},
 		],
+		scripts: googleAnalyticsScripts,
 	}),
 	shellComponent: RootDocument,
 });
+
+function GoogleAnalyticsPageViews() {
+	const router = useRouter();
+
+	useEffect(() => {
+		if (!import.meta.env.PROD) return;
+		const gtag = (window as any).gtag;
+		if (typeof gtag !== "function") return;
+
+		const sendPageView = (location: {
+			href: string;
+			publicHref?: string;
+			pathname: string;
+			search: string;
+			hash: string;
+		}) => {
+			const publicPath =
+				location.publicHref ??
+				`${location.pathname}${location.search}${location.hash}`;
+
+			gtag("event", "page_view", {
+				page_location: new URL(publicPath, window.location.origin).href,
+				page_path: publicPath,
+				page_title: document.title,
+			});
+		};
+
+		sendPageView(router.history.location);
+		const unsubscribe = router.history.subscribe(({ location }) => {
+			sendPageView(location);
+		});
+
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	return null;
+}
 
 function RootDocument({ children }: { children: ReactNode }) {
 	return (
@@ -139,6 +198,7 @@ function RootDocument({ children }: { children: ReactNode }) {
 			</head>
 			<body>
 				{children}
+				<GoogleAnalyticsPageViews />
 				<Scripts />
 			</body>
 		</html>
