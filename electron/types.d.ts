@@ -117,12 +117,19 @@ export type DesktopTerminalApi = {
 	onExit(listener: (event: DesktopTerminalExitEvent) => void): () => void;
 };
 
-export type DesktopWorkspace = {
-	kind: "directory" | "transientDirectory";
-	path: string;
-	name: string;
-	sourceFilePaths?: string[];
-};
+export type DesktopWorkspace =
+	| {
+			ephemeral: false;
+			path: string;
+			name: string;
+			sourceFilePaths?: never;
+	  }
+	| {
+			ephemeral: true;
+			path: string;
+			name: string;
+			sourceFilePaths: string[];
+	  };
 
 export type DesktopWorkspaceApi = {
 	get(): Promise<DesktopWorkspace | null>;

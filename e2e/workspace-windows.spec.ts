@@ -654,8 +654,11 @@ async function writeWorkspaceSession(
 		workspaceSessionPath(userDataDir),
 		`${JSON.stringify(
 			{
-				version: 1,
-				workspacePaths,
+				version: 3,
+				workspaces: workspacePaths.map((workspacePath) => ({
+					ephemeral: false,
+					path: workspacePath,
+				})),
 			},
 			null,
 			2,
@@ -674,12 +677,9 @@ async function expectWorkspaceSessionPaths(
 				const store = JSON.parse(
 					await readFile(workspaceSessionPath(userDataDir), "utf8"),
 				);
-				if (Array.isArray(store.workspacePaths)) {
-					return store.workspacePaths;
-				}
 				return Array.isArray(store.workspaces)
 					? store.workspaces
-							.filter((workspace: any) => workspace.kind === "directory")
+							.filter((workspace: any) => workspace.ephemeral === false)
 							.map((workspace: any) => workspace.path)
 					: null;
 			} catch {

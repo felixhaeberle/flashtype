@@ -41,43 +41,12 @@ describe("workspace session store", () => {
 
 		await writeFile(
 			getWorkspaceSessionPath(userDataPath),
-			JSON.stringify({ version: 999, workspacePaths: ["/tmp/workspace"] }),
+			JSON.stringify({ version: 999, workspaces: [] }),
 			"utf8",
 		);
 		await expect(readWorkspaceSessionEntries(userDataPath)).resolves.toEqual(
 			[],
 		);
-	});
-
-	test("migrates v1 path stores to path entries", async () => {
-		const userDataPath = createUserDataPath();
-		const firstWorkspacePath = path.join(userDataPath, "first-workspace");
-		const secondWorkspacePath = path.join(userDataPath, "second-workspace");
-		await mkdir(userDataPath, { recursive: true });
-		await writeFile(
-			getWorkspaceSessionPath(userDataPath),
-			JSON.stringify({
-				version: 1,
-				workspacePaths: [
-					firstWorkspacePath,
-					123,
-					"",
-					path.join(
-						firstWorkspacePath,
-						"..",
-						path.basename(firstWorkspacePath),
-					),
-					secondWorkspacePath,
-					null,
-				],
-			}),
-			"utf8",
-		);
-
-		await expect(readWorkspaceSessionEntries(userDataPath)).resolves.toEqual([
-			{ kind: "path", path: firstWorkspacePath },
-			{ kind: "path", path: secondWorkspacePath },
-		]);
 	});
 
 	test("write persists normalized workspace entries", async () => {
@@ -87,10 +56,10 @@ describe("workspace session store", () => {
 		const secondFilePath = path.join(userDataPath, "files", "two.md");
 
 		await writeWorkspaceSessionEntries(userDataPath, [
-			{ kind: "directory", path: workspacePath },
-			{ kind: "directory", path: workspacePath },
+			{ ephemeral: false, path: workspacePath },
+			{ ephemeral: false, path: workspacePath },
 			{
-				kind: "transientDirectory",
+				ephemeral: true,
 				sourceFilePaths: [firstFilePath, secondFilePath, firstFilePath],
 			},
 		]);
@@ -98,40 +67,13 @@ describe("workspace session store", () => {
 		await expect(readStore(userDataPath)).resolves.toEqual({
 			version: WORKSPACE_SESSION_VERSION,
 			workspaces: [
-				{ kind: "directory", path: workspacePath },
+				{ ephemeral: false, path: workspacePath },
 				{
-					kind: "transientDirectory",
+					ephemeral: true,
 					sourceFilePaths: [firstFilePath, secondFilePath],
 				},
 			],
 		});
-	});
-
-	test("reads legacy ephemeral file entries as transient directories", async () => {
-		const userDataPath = createUserDataPath();
-		const firstFilePath = path.join(userDataPath, "files", "one.md");
-		const secondFilePath = path.join(userDataPath, "files", "two.md");
-		await mkdir(userDataPath, { recursive: true });
-		await writeFile(
-			getWorkspaceSessionPath(userDataPath),
-			JSON.stringify({
-				version: 2,
-				workspaces: [
-					{
-						kind: "ephemeralFiles",
-						sourceFilePaths: [firstFilePath, secondFilePath],
-					},
-				],
-			}),
-			"utf8",
-		);
-
-		await expect(readWorkspaceSessionEntries(userDataPath)).resolves.toEqual([
-			{
-				kind: "transientDirectory",
-				sourceFilePaths: [firstFilePath, secondFilePath],
-			},
-		]);
 	});
 
 	test("sync write persists normalized workspace entries", async () => {
@@ -139,12 +81,12 @@ describe("workspace session store", () => {
 		const workspacePath = path.join(userDataPath, "workspace");
 
 		writeWorkspaceSessionEntriesSync(userDataPath, [
-			{ kind: "directory", path: workspacePath },
+			{ ephemeral: false, path: workspacePath },
 		]);
 
 		await expect(readStore(userDataPath)).resolves.toEqual({
 			version: WORKSPACE_SESSION_VERSION,
-			workspaces: [{ kind: "directory", path: workspacePath }],
+			workspaces: [{ ephemeral: false, path: workspacePath }],
 		});
 	});
 
@@ -160,18 +102,16 @@ describe("workspace session store", () => {
 
 		await expect(
 			filterExistingWorkspaceEntries([
-				{ kind: "directory", path: directoryWorkspacePath },
-				{ kind: "directory", path: staleWorkspacePath },
+				{ ephemeral: false, path: directoryWorkspacePath },
+				{ ephemeral: false, path: staleWorkspacePath },
 				{
-					kind: "transientDirectory",
+					ephemeral: true,
 					sourceFilePaths: [firstFilePath, secondFilePath],
 				},
-				{ kind: "path", path: firstFilePath },
 			]),
 		).resolves.toEqual([
-			{ kind: "directory", path: directoryWorkspacePath },
-			{ kind: "transientDirectory", sourceFilePaths: [firstFilePath] },
-			{ kind: "path", path: firstFilePath },
+			{ ephemeral: false, path: directoryWorkspacePath },
+			{ ephemeral: true, sourceFilePaths: [firstFilePath] },
 		]);
 	});
 });

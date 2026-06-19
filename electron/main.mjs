@@ -219,10 +219,10 @@ function mergeRestoredAndExplicitWorkspaceRequests(
 	const restoredOnlyWorkspaceEntries = normalizeWorkspaceSessionEntries(
 		restoredWorkspaceEntries,
 	).filter((workspaceEntry) => {
-		if (workspaceEntry.kind === "directory" || workspaceEntry.kind === "path") {
+		if (workspaceEntry.ephemeral === false) {
 			return !explicitWorkspacePathSet.has(workspaceEntry.path);
 		}
-		if (workspaceEntry.kind === "transientDirectory") {
+		if (workspaceEntry.ephemeral === true) {
 			return !workspaceEntry.sourceFilePaths.some((sourceFilePath) =>
 				explicitWorkspacePathSet.has(sourceFilePath),
 			);

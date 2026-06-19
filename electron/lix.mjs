@@ -23,9 +23,9 @@ export async function ensureLixOpen(window) {
 						"No workspace is open. Open a folder before using lix.",
 					);
 				}
-				const isTransientDirectory = workspace.kind === "transientDirectory";
+				const isEphemeral = workspace.ephemeral === true;
 				const nativeLix = await openLix({
-					backend: isTransientDirectory
+					backend: isEphemeral
 						? new FsEphemeralBackend({ path: workspace.path })
 						: new FsBackend({ path: workspace.path }),
 				});
@@ -99,7 +99,7 @@ export async function resetLixRepository(window) {
 				"No workspace is open. Open a folder before resetting lix.",
 			);
 		}
-		if (workspace.kind === "transientDirectory") {
+		if (workspace.ephemeral === true) {
 			throw new Error("Cannot reset a transient workspace.");
 		}
 		await closeCurrentLix(session, { ignoreOpenError: true });
@@ -109,7 +109,7 @@ export async function resetLixRepository(window) {
 
 export async function exportCurrentLixImage(window) {
 	const workspace = getWorkspace(window);
-	if (workspace?.kind === "transientDirectory") {
+	if (workspace?.ephemeral === true) {
 		throw new Error(
 			"Cannot export a .lix database from a transient workspace.",
 		);

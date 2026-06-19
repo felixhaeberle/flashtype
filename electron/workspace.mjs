@@ -39,7 +39,7 @@ export async function resolveWorkspaceTarget(requestedPath) {
 			}
 			return {
 				workspace: {
-					kind: "directory",
+					ephemeral: false,
 					path: workspaceDir,
 					name: path.basename(workspaceDir),
 				},
@@ -54,7 +54,7 @@ export async function resolveWorkspaceTarget(requestedPath) {
 	}
 	return {
 		workspace: {
-			kind: "directory",
+			ephemeral: false,
 			path: resolved,
 			name: path.basename(resolved),
 		},
@@ -71,17 +71,13 @@ export async function resolveWorkspaceTargets(requestedPaths) {
 		if (
 			requestedPath &&
 			typeof requestedPath === "object" &&
-			typeof requestedPath.kind === "string"
+			typeof requestedPath.ephemeral === "boolean"
 		) {
-			if (requestedPath.kind === "path") {
-				requestedPath = requestedPath.path;
-			} else {
-				const target = await resolveWorkspaceSessionEntry(requestedPath);
-				if (target) {
-					targets.push(target);
-				}
-				continue;
+			const target = await resolveWorkspaceSessionEntry(requestedPath);
+			if (target) {
+				targets.push(target);
 			}
+			continue;
 		}
 
 		const resolved = path.resolve(String(requestedPath));
@@ -163,7 +159,7 @@ export async function exportWorkspaceLixFile(window) {
 			"No workspace is open. Open a folder before exporting lix.",
 		);
 	}
-	if (workspace.kind === "transientDirectory") {
+	if (workspace.ephemeral === true) {
 		throw new Error(
 			"Cannot export a .lix database from a transient workspace.",
 		);
@@ -182,7 +178,7 @@ export function getWorkspaceLixDatabasePath(window) {
 			"No workspace is open. Open a folder before exporting lix.",
 		);
 	}
-	if (workspace.kind === "transientDirectory") {
+	if (workspace.ephemeral === true) {
 		throw new Error(
 			"Transient workspaces do not have a .lix database on disk.",
 		);
@@ -213,13 +209,10 @@ function applyWindowChrome(window) {
 }
 
 async function resolveWorkspaceSessionEntry(workspaceEntry) {
-	if (workspaceEntry.kind === "directory") {
+	if (workspaceEntry.ephemeral === false) {
 		return await resolveWorkspaceTarget(workspaceEntry.path);
 	}
-	if (
-		workspaceEntry.kind === "transientDirectory" ||
-		workspaceEntry.kind === "ephemeralFiles"
-	) {
+	if (workspaceEntry.ephemeral === true) {
 		const sourceFilePaths = [];
 		for (const sourceFilePath of workspaceEntry.sourceFilePaths ?? []) {
 			try {
@@ -239,9 +232,6 @@ async function resolveWorkspaceSessionEntry(workspaceEntry) {
 			pendingOpenFilePaths:
 				pendingOpenFilePathsForTransientDirectoryWorkspace(workspace),
 		};
-	}
-	if (workspaceEntry.kind === "path") {
-		return await resolveWorkspaceTarget(workspaceEntry.path);
 	}
 	return null;
 }
@@ -266,7 +256,7 @@ function createTransientDirectoryWorkspace(sourceFilePaths) {
 		),
 	);
 	return {
-		kind: "transientDirectory",
+		ephemeral: true,
 		path: workspacePath,
 		sourceFilePaths: normalizedSourceFilePaths,
 		name: path.basename(workspacePath) || workspacePath,
@@ -338,10 +328,10 @@ function workspaceKey(workspace) {
 	if (!workspace) {
 		return null;
 	}
-	if (workspace.kind === "transientDirectory") {
-		return `${workspace.kind}:${workspace.sourceFilePaths.join("\0")}`;
+	if (workspace.ephemeral === true) {
+		return `ephemeral:${workspace.sourceFilePaths.join("\0")}`;
 	}
-	return `${workspace.kind}:${workspace.path}`;
+	return `directory:${workspace.path}`;
 }
 
 async function showWorkspaceDialog(window) {

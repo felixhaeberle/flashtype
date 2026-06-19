@@ -25,7 +25,7 @@ describe("workspace resolution", () => {
 		await mkdir(directory, { recursive: true });
 
 		await expect(resolveWorkspace(directory)).resolves.toEqual({
-			kind: "directory",
+			ephemeral: false,
 			path: directory,
 			name: "workspace",
 		});
@@ -44,7 +44,7 @@ describe("workspace resolution", () => {
 		await writeFile(filePath, "# Hello\n");
 
 		await expect(resolveWorkspace(filePath)).resolves.toEqual({
-			kind: "directory",
+			ephemeral: false,
 			path: directory,
 			name: "workspace",
 		});
@@ -63,7 +63,7 @@ describe("workspace resolution", () => {
 		await writeFile(filePath, "# Hello\n");
 
 		await expect(resolveWorkspace(filePath)).resolves.toEqual({
-			kind: "directory",
+			ephemeral: false,
 			path: directory,
 			name: "workspace",
 		});
@@ -84,7 +84,7 @@ describe("workspace resolution", () => {
 
 		await expect(resolveWorkspaceTarget(filePath)).resolves.toEqual({
 			workspace: {
-				kind: "directory",
+				ephemeral: false,
 				path: directory,
 				name: "workspace",
 			},
@@ -105,7 +105,7 @@ describe("workspace resolution", () => {
 
 		await expect(resolveWorkspaceTarget(filePath)).resolves.toEqual({
 			workspace: {
-				kind: "transientDirectory",
+				ephemeral: true,
 				path: directory,
 				sourceFilePaths: [filePath],
 				name: "workspace",
@@ -132,7 +132,7 @@ describe("workspace resolution", () => {
 		).resolves.toEqual([
 			{
 				workspace: {
-					kind: "transientDirectory",
+					ephemeral: true,
 					path: directory,
 					sourceFilePaths: [firstPath, secondPath],
 					name: "workspace",
@@ -179,7 +179,7 @@ describe("workspace resolution", () => {
 		).resolves.toEqual([
 			{
 				workspace: {
-					kind: "directory",
+					ephemeral: false,
 					path: firstDirectory,
 					name: "first",
 				},
@@ -187,7 +187,7 @@ describe("workspace resolution", () => {
 			},
 			{
 				workspace: {
-					kind: "directory",
+					ephemeral: false,
 					path: secondDirectory,
 					name: "second",
 				},
@@ -214,7 +214,7 @@ describe("workspace resolution", () => {
 		).resolves.toEqual([
 			{
 				workspace: {
-					kind: "transientDirectory",
+					ephemeral: true,
 					path: directory,
 					sourceFilePaths: [firstPath, secondPath],
 					name: "workspace",

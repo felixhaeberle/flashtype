@@ -12,18 +12,10 @@ export async function readWorkspaceSessionEntries(userDataPath) {
 		});
 		const store = JSON.parse(rawStore);
 		if (
-			(store?.version === WORKSPACE_SESSION_VERSION || store?.version === 2) &&
+			store?.version === WORKSPACE_SESSION_VERSION &&
 			Array.isArray(store.workspaces)
 		) {
 			return normalizeWorkspaceSessionEntries(store.workspaces);
-		}
-		if (store?.version === 1 && Array.isArray(store.workspacePaths)) {
-			return normalizeWorkspacePaths(store.workspacePaths).map(
-				(workspacePath) => ({
-					kind: "path",
-					path: workspacePath,
-				}),
-			);
 		}
 		return [];
 	} catch {
@@ -60,7 +52,7 @@ export async function filterExistingWorkspaceEntries(workspaceEntries) {
 	for (const workspaceEntry of normalizeWorkspaceSessionEntries(
 		workspaceEntries,
 	)) {
-		if (workspaceEntry.kind === "directory") {
+		if (workspaceEntry.ephemeral === false) {
 			try {
 				if ((await fs.stat(workspaceEntry.path)).isDirectory()) {
 					existingWorkspaceEntries.push(workspaceEntry);
@@ -71,7 +63,7 @@ export async function filterExistingWorkspaceEntries(workspaceEntries) {
 			continue;
 		}
 
-		if (workspaceEntry.kind === "transientDirectory") {
+		if (workspaceEntry.ephemeral === true) {
 			const sourceFilePaths = [];
 			for (const sourceFilePath of workspaceEntry.sourceFilePaths) {
 				try {
@@ -84,22 +76,11 @@ export async function filterExistingWorkspaceEntries(workspaceEntries) {
 			}
 			if (sourceFilePaths.length > 0) {
 				existingWorkspaceEntries.push({
-					kind: "transientDirectory",
+					ephemeral: true,
 					sourceFilePaths,
 				});
 			}
 			continue;
-		}
-
-		if (workspaceEntry.kind === "path") {
-			try {
-				const stats = await fs.stat(workspaceEntry.path);
-				if (stats.isDirectory() || stats.isFile()) {
-					existingWorkspaceEntries.push(workspaceEntry);
-				}
-			} catch {
-				// Ignore stale v1 paths.
-			}
 		}
 	}
 	return existingWorkspaceEntries;
@@ -109,19 +90,19 @@ export function workspaceToSessionEntry(workspace) {
 	if (!workspace) {
 		return null;
 	}
-	if (workspace.kind === "directory") {
+	if (workspace.ephemeral === false) {
 		return {
-			kind: "directory",
+			ephemeral: false,
 			path: path.resolve(workspace.path),
 		};
 	}
-	if (workspace.kind === "transientDirectory") {
+	if (workspace.ephemeral === true) {
 		const sourceFilePaths = normalizeWorkspacePaths(workspace.sourceFilePaths);
 		if (sourceFilePaths.length === 0) {
 			return null;
 		}
 		return {
-			kind: "transientDirectory",
+			ephemeral: true,
 			sourceFilePaths,
 		};
 	}
@@ -180,20 +161,16 @@ function normalizeWorkspaceSessionEntry(workspaceEntry) {
 	if (!workspaceEntry || typeof workspaceEntry !== "object") {
 		return null;
 	}
-	if (
-		workspaceEntry.kind === "directory" &&
-		typeof workspaceEntry.path === "string" &&
-		workspaceEntry.path.length > 0
-	) {
+	if (workspaceEntry.ephemeral === false) {
+		if (typeof workspaceEntry.path !== "string" || workspaceEntry.path === "") {
+			return null;
+		}
 		return {
-			kind: "directory",
+			ephemeral: false,
 			path: path.resolve(workspaceEntry.path),
 		};
 	}
-	if (
-		workspaceEntry.kind === "transientDirectory" ||
-		workspaceEntry.kind === "ephemeralFiles"
-	) {
+	if (workspaceEntry.ephemeral === true) {
 		const sourceFilePaths = normalizeWorkspacePaths(
 			workspaceEntry.sourceFilePaths,
 		);
@@ -201,78 +178,27 @@ function normalizeWorkspaceSessionEntry(workspaceEntry) {
 			return null;
 		}
 		return {
-			kind: "transientDirectory",
+			ephemeral: true,
 			sourceFilePaths,
-		};
-	}
-	if (
-		workspaceEntry.kind === "path" &&
-		typeof workspaceEntry.path === "string" &&
-		workspaceEntry.path.length > 0
-	) {
-		return {
-			kind: "path",
-			path: path.resolve(workspaceEntry.path),
 		};
 	}
 	return null;
 }
 
 function workspaceSessionEntryKey(workspaceEntry) {
-	if (workspaceEntry.kind === "transientDirectory") {
-		return `${workspaceEntry.kind}:${workspaceEntry.sourceFilePaths.join("\0")}`;
+	if (workspaceEntry.ephemeral === true) {
+		return `ephemeral:${workspaceEntry.sourceFilePaths.join("\0")}`;
 	}
-	return `${workspaceEntry.kind}:${workspaceEntry.path}`;
+	return `directory:${workspaceEntry.path}`;
 }
 
 function serializeWorkspaceSessionEntries(workspaceEntries) {
 	return `${JSON.stringify(
 		{
 			version: WORKSPACE_SESSION_VERSION,
-			workspaces: normalizeWorkspaceSessionEntries(workspaceEntries).filter(
-				(workspaceEntry) => workspaceEntry.kind !== "path",
-			),
+			workspaces: normalizeWorkspaceSessionEntries(workspaceEntries),
 		},
 		null,
 		2,
 	)}\n`;
-}
-
-// Backwards-compatible aliases for older callers/tests.
-export async function readWorkspaceSessionPaths(userDataPath) {
-	return (await readWorkspaceSessionEntries(userDataPath))
-		.filter((workspaceEntry) => workspaceEntry.kind === "path")
-		.map((workspaceEntry) => workspaceEntry.path);
-}
-
-export async function writeWorkspaceSessionPaths(userDataPath, workspacePaths) {
-	await writeWorkspaceSessionEntries(
-		userDataPath,
-		normalizeWorkspacePaths(workspacePaths).map((workspacePath) => ({
-			kind: "directory",
-			path: workspacePath,
-		})),
-	);
-}
-
-export function writeWorkspaceSessionPathsSync(userDataPath, workspacePaths) {
-	writeWorkspaceSessionEntriesSync(
-		userDataPath,
-		normalizeWorkspacePaths(workspacePaths).map((workspacePath) => ({
-			kind: "directory",
-			path: workspacePath,
-		})),
-	);
-}
-
-export async function filterExistingWorkspacePaths(workspacePaths) {
-	const entries = await filterExistingWorkspaceEntries(
-		normalizeWorkspacePaths(workspacePaths).map((workspacePath) => ({
-			kind: "path",
-			path: workspacePath,
-		})),
-	);
-	return entries
-		.filter((workspaceEntry) => workspaceEntry.kind === "path")
-		.map((workspaceEntry) => workspaceEntry.path);
 }
