@@ -23,7 +23,7 @@
 		"build": "vite build",
 		"prebuild": "pnpm run build:lix && pnpm run build:markdown-wc",
 		"postinstall": "command -v cargo >/dev/null 2>&1 && cargo fetch --manifest-path submodule/lix/Cargo.toml || true",
-		"build:lix": "pnpm -C submodule/lix/packages/js-sdk run build",
+		"build:lix": "node scripts/build-lix.mjs",
 		"preview": "vite preview --strictPort --port 5173",
 		"typecheck": "tsc -p . --pretty false",
 		"format": "prettier --write .",
