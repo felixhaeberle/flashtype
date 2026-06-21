@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 - 2026-06-21
+
+### Patch
+
+- Improved the Markdown editor chrome around autosave and formatting controls.
+
 ## 0.4.0 - 2026-06-19
 
 ### Minor
