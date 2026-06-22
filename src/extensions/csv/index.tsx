@@ -86,8 +86,16 @@ function CsvViewContent({
 
 	if (!fileRow) {
 		return (
-			<div className="flex h-full items-center justify-center text-sm text-[var(--color-text-tertiary)]">
-				File not found in the workspace.
+			<div className="flex h-full items-center justify-center px-6 py-8 text-center">
+				<div className="max-w-sm space-y-2 text-sm text-[var(--color-text-secondary)]">
+					<p className="font-medium text-[var(--color-text-primary)]">
+						File is not on this branch.
+					</p>
+					<p>
+						This CSV exists in another branch, but it is not available in the
+						current branch.
+					</p>
+				</div>
 			</div>
 		);
 	}

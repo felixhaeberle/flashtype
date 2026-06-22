@@ -85,6 +85,17 @@ export function FilesView({ context }: FilesViewProps) {
 			prev.filter((path) => !entryDirectorySet.has(path)),
 		);
 	}, [entryDirectorySet, pendingDirectoryPaths.length]);
+	useEffect(() => {
+		if (!selectedPath || !selectedKind) return;
+		const selectedStillExists =
+			selectedKind === "file"
+				? entryPathSet.has(selectedPath)
+				: entryDirectorySet.has(ensureDirectoryPath(selectedPath));
+		if (selectedStillExists) return;
+		setSelectedPath(null);
+		setSelectedFileId(null);
+		setSelectedKind(null);
+	}, [entryDirectorySet, entryPathSet, selectedKind, selectedPath]);
 	const isMacPlatform = useMemo(() => detectMacPlatform(), []);
 	const isPanelFocused = context?.isPanelFocused ?? false;
 

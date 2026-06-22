@@ -184,6 +184,57 @@ describe("FilesView", () => {
 		await lix.close();
 	});
 
+	test("clears selected file when branch state removes it from the tree", async () => {
+		const lix = await openLix();
+		await qb(lix)
+			.insertInto("lix_file")
+			.values({
+				id: "file_branch_removed",
+				path: "/branch-removed.md",
+				data: new Uint8Array(),
+			})
+			.execute();
+
+		let utils: ReturnType<typeof render>;
+		await act(async () => {
+			utils = render(
+				<LixProvider lix={lix}>
+					<Suspense fallback={null}>
+						<FilesView context={createViewContext(lix)} />
+					</Suspense>
+				</LixProvider>,
+			);
+		});
+
+		const fileItem = await utils!.findByTestId(
+			"file-tree-item-branch-removed-md",
+		);
+		await act(async () => {
+			fireEvent.click(fileItem);
+		});
+		expect(fileItem).toHaveAttribute("data-selected", "true");
+
+		await act(async () => {
+			await qb(lix)
+				.deleteFrom("lix_file")
+				.where("id", "=", "file_branch_removed")
+				.execute();
+		});
+
+		await waitFor(() => {
+			expect(
+				utils!.queryByTestId("file-tree-item-branch-removed-md"),
+			).toBeNull();
+		});
+
+		await act(async () => {
+			fireEvent.keyDown(document, { key: "Backspace", metaKey: true });
+		});
+
+		utils!.unmount();
+		await lix.close();
+	});
+
 	test("Cmd+Backspace in an empty editor keeps a newly created selected file and editor event", async () => {
 		const lix = await openLix();
 		const openFile = vi.fn();

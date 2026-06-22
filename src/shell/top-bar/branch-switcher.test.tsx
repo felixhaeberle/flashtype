@@ -95,6 +95,145 @@ describe("BranchSwitcher", () => {
 		});
 	});
 
+	test("shows an error when branch switching fails", async () => {
+		const draftName = `draft-${Math.random().toString(36).slice(2, 7)}`;
+		await lix.createBranch({ name: draftName });
+		vi.spyOn(lix, "switchBranch").mockRejectedValueOnce(
+			new Error("switch failed"),
+		);
+
+		await renderWithProviders();
+
+		await act(async () => {
+			fireEvent.pointerDown(
+				screen.getByRole("button", { name: "Select branch" }),
+				{ button: 0 },
+			);
+			fireEvent.pointerUp(
+				screen.getByRole("button", { name: "Select branch" }),
+				{
+					button: 0,
+				},
+			);
+		});
+
+		await act(async () => {
+			fireEvent.click(await screen.findByRole("menuitem", { name: draftName }));
+		});
+
+		await act(async () => {
+			fireEvent.pointerDown(
+				screen.getByRole("button", { name: "Select branch" }),
+				{ button: 0 },
+			);
+			fireEvent.pointerUp(
+				screen.getByRole("button", { name: "Select branch" }),
+				{
+					button: 0,
+				},
+			);
+		});
+
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"Could not switch branch.",
+		);
+	});
+
+	test("ignores concurrent branch switch clicks while a switch is pending", async () => {
+		const first = await lix.createBranch({ name: "first-pending" });
+		await lix.createBranch({ name: "second-pending" });
+		let resolveSwitch!: () => void;
+		const switchSpy = vi.spyOn(lix, "switchBranch").mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveSwitch = () => resolve({ branchId: first.id });
+				}),
+		);
+
+		await renderWithProviders();
+
+		await act(async () => {
+			fireEvent.pointerDown(
+				screen.getByRole("button", { name: "Select branch" }),
+				{ button: 0 },
+			);
+			fireEvent.pointerUp(
+				screen.getByRole("button", { name: "Select branch" }),
+				{
+					button: 0,
+				},
+			);
+		});
+
+		await act(async () => {
+			fireEvent.click(
+				await screen.findByRole("menuitem", { name: "first-pending" }),
+			);
+		});
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: "Select branch" }));
+		});
+
+		expect(switchSpy).toHaveBeenCalledTimes(1);
+		expect(
+			screen.getByRole("button", { name: "Select branch" }),
+		).toBeDisabled();
+
+		await act(async () => {
+			resolveSwitch();
+		});
+	});
+
+	test("creates a branch and switches to it", async () => {
+		const branchName = `feature-${Math.random().toString(36).slice(2, 7)}`;
+
+		await renderWithProviders();
+
+		await act(async () => {
+			fireEvent.pointerDown(
+				screen.getByRole("button", { name: "Select branch" }),
+			);
+			fireEvent.pointerUp(
+				screen.getByRole("button", { name: "Select branch" }),
+			);
+		});
+
+		const createItem = await screen.findByRole("menuitem", {
+			name: "Create branch",
+		});
+		await act(async () => {
+			fireEvent.click(createItem);
+		});
+
+		const branchNameInput = await screen.findByRole("textbox", {
+			name: "Branch name",
+		});
+		await act(async () => {
+			fireEvent.change(branchNameInput, {
+				target: { value: branchName },
+			});
+			fireEvent.submit(branchNameInput.closest("form")!);
+		});
+
+		await waitFor(() => {
+			expect(
+				screen.getByRole("button", { name: "Select branch" }),
+			).toHaveTextContent(branchName);
+		});
+
+		const created = await qb(lix)
+			.selectFrom("lix_branch")
+			.select(["id", "name"])
+			.where("name", "=", branchName)
+			.executeTakeFirstOrThrow();
+		expect(created.name).toBe(branchName);
+
+		await waitFor(async () => {
+			const activeBranchId = await lix.activeBranchId();
+			expect(activeBranchId).toBe(created.id);
+		});
+	});
+
 	test("renames a branch via actions menu", async () => {
 		const baseName = `docs-${Math.random().toString(36).slice(2, 7)}`;
 		const renamedName = `${baseName}-renamed`;

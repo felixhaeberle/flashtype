@@ -6,6 +6,7 @@ import { parseMarkdown, serializeAst } from "./markdown-rust";
 import { handlePaste } from "./handle-paste";
 import { Editor } from "@tiptap/core";
 import { qb } from "@/lib/lix-kysely";
+import { flushMarkdownAutosaves } from "./autosave-flush";
 
 const ensureTrailingNewline = (value: string) =>
 	value.endsWith("\n") ? value : `${value}\n`;
@@ -709,6 +710,50 @@ test("destroy flushes pending autosave for an existing file", async () => {
 		(value) => value === ensureTrailingNewline("Start Changed"),
 	);
 	expect(markdown).toBe(ensureTrailingNewline("Start Changed"));
+
+	await lix.close();
+});
+
+test("flushMarkdownAutosaves persists debounced edits before branch switch", async () => {
+	const lix = await openLix();
+	const fileId = "flush_before_branch_switch";
+	const mainBranchId = await lix.activeBranchId();
+
+	await qb(lix)
+		.insertInto("lix_file")
+		.values({
+			id: fileId,
+			path: "/flush-before-branch-switch.md",
+			data: new TextEncoder().encode("Main"),
+		})
+		.execute();
+
+	const targetBranch = await lix.createBranch({ name: "Target" });
+	await qb(lix)
+		.updateTable("lix_file_by_branch")
+		.set({ data: new TextEncoder().encode("Target\n") })
+		.where("id", "=", fileId)
+		.where("lixcol_branch_id", "=", targetBranch.id)
+		.execute();
+
+	const editor: Editor = await createEditorFromFile({
+		lix,
+		fileId,
+		persistDebounceMs: 10_000,
+	});
+
+	editor.commands.setTextSelection(editor.state.doc.content.size);
+	editor.commands.insertContent(" edited");
+
+	await flushMarkdownAutosaves();
+	await lix.switchBranch({ branchId: targetBranch.id });
+	editor.destroy();
+
+	const targetMarkdown = await readMarkdown(lix, fileId);
+	expect(targetMarkdown).toBe(ensureTrailingNewline("Target"));
+	await lix.switchBranch({ branchId: mainBranchId });
+	const mainMarkdown = await readMarkdown(lix, fileId);
+	expect(mainMarkdown).toBe(ensureTrailingNewline("Main edited"));
 
 	await lix.close();
 });

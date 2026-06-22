@@ -56,3 +56,38 @@ test("updates when CSV file data changes in Lix", async () => {
 		await lix.close();
 	}
 });
+
+test("shows branch-specific missing file state when CSV is absent", async () => {
+	const lix = await openLix();
+	let utils: ReturnType<typeof render> | undefined;
+	try {
+		const fileId = "file_csv_missing_branch";
+
+		await act(async () => {
+			utils = render(
+				<LixProvider lix={lix}>
+					<Suspense fallback={null}>
+						<CsvView fileId={fileId} />
+					</Suspense>
+				</LixProvider>,
+			);
+		});
+
+		expect(
+			await screen.findByText("File is not on this branch."),
+		).toBeVisible();
+		expect(
+			screen.getByText(
+				"This CSV exists in another branch, but it is not available in the current branch.",
+			),
+		).toBeVisible();
+	} finally {
+		if (utils) {
+			const rendered = utils;
+			await act(async () => {
+				rendered.unmount();
+			});
+		}
+		await lix.close();
+	}
+});

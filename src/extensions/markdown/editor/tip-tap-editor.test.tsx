@@ -389,6 +389,70 @@ test("updates editor when switching to a branch with different external state", 
 	});
 });
 
+test("shows a branch-specific missing file state when the active file is absent", async () => {
+	const lix = await openLix({
+		keyValues: [
+			{
+				key: "lix_deterministic_mode",
+				value: { enabled: true },
+				lixcol_branch_id: "global",
+				lixcol_global: true,
+			},
+		],
+	});
+
+	const fileId = "file_missing_on_branch";
+	await qb(lix)
+		.insertInto("lix_file")
+		.values({
+			id: fileId,
+			path: "/missing-on-branch.md",
+			data: new TextEncoder().encode("Only on main"),
+		})
+		.execute();
+
+	await qb(lix)
+		.insertInto("lix_key_value_by_branch")
+		.values({
+			key: "flashtype_active_file_id",
+			value: fileId,
+			lixcol_branch_id: "global",
+			lixcol_global: true,
+			lixcol_untracked: true,
+		})
+		.execute();
+
+	const branchB = await lix.createBranch({ name: "Without file" });
+	await qb(lix)
+		.deleteFrom("lix_file_by_branch")
+		.where("id", "=", fileId)
+		.where("lixcol_branch_id", "=", branchB.id)
+		.execute();
+
+	await act(async () => {
+		render(
+			<Suspense>
+				<Providers lix={lix}>
+					<TipTapEditor />
+				</Providers>
+			</Suspense>,
+		);
+	});
+
+	expect(await screen.findByTestId("tiptap-editor")).toHaveTextContent(
+		"Only on main",
+	);
+
+	await act(async () => {
+		await lix.switchBranch({ branchId: branchB.id });
+	});
+
+	await waitFor(() => {
+		expect(screen.getByText("File is not on this branch.")).toBeInTheDocument();
+	});
+	expect(screen.queryByTestId("tiptap-editor")).not.toBeInTheDocument();
+});
+
 test("updates editor when file.data is updated externally (simulate updateFile with markdown)", async () => {
 	const lix = await openLix({
 		keyValues: [

@@ -1,7 +1,14 @@
-import { useCallback, useState } from "react";
+import {
+	type FormEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { qb, sql } from "@/lib/lix-kysely";
 import { useLix, useQuery, useQueryTakeFirstOrThrow } from "@/lib/lix-react";
 import { Button } from "@/components/ui/button";
+import { flushMarkdownAutosaves } from "@/extensions/markdown/editor/autosave-flush";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -97,48 +104,86 @@ function BranchSwitcherContent({
 
 	const [pendingAction, setPendingAction] = useState<string | null>(null);
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [isCreatingBranch, setIsCreatingBranch] = useState(false);
+	const [newBranchName, setNewBranchName] = useState("");
+	const [actionError, setActionError] = useState<string | null>(null);
+	const newBranchNameInputRef = useRef<HTMLInputElement | null>(null);
+
+	useEffect(() => {
+		if (!isCreatingBranch) return;
+		newBranchNameInputRef.current?.focus();
+		newBranchNameInputRef.current?.select();
+	}, [isCreatingBranch]);
+
+	const isBusy = pendingAction !== null;
 
 	const handleSwitch = useCallback(
 		async (branchId: string) => {
-			if (!lix || branchId === activeBranchRow.id) return;
+			if (!lix || isBusy || branchId === activeBranchRow.id) return;
 			setPendingAction(branchId);
+			setActionError(null);
 			try {
+				await flushMarkdownAutosaves();
 				await lix.switchBranch({ branchId });
 			} catch (error) {
 				console.error("Failed to switch branch", error);
+				setActionError("Could not switch branch.");
 			} finally {
 				setPendingAction(null);
 			}
 		},
-		[lix, activeBranchRow.id],
+		[lix, isBusy, activeBranchRow.id],
 	);
 
-	const handleCreateBranch = useCallback(async () => {
-		if (!lix) return;
-		const suggestion = `draft-${branches.length + 1}`;
-		const entered = window.prompt("Name the new branch", suggestion);
-		if (entered === null) return;
-		const trimmed = entered.trim();
-		setPendingAction("create");
-		try {
-			const created = await lix.createBranch({
-				name: trimmed.length > 0 ? trimmed : suggestion,
-			});
-			await lix.switchBranch({ branchId: created.id });
-		} catch (error) {
-			console.error("Failed to create branch", error);
-		} finally {
-			setPendingAction(null);
-		}
-	}, [lix, branches.length]);
+	const createBranch = useCallback(
+		async (name: string) => {
+			if (!lix || isBusy) return;
+			const suggestion = `draft-${branches.length + 1}`;
+			const trimmed = name.trim();
+			setPendingAction("create");
+			setActionError(null);
+			try {
+				const created = await lix.createBranch({
+					name: trimmed.length > 0 ? trimmed : suggestion,
+				});
+				await flushMarkdownAutosaves();
+				await lix.switchBranch({ branchId: created.id });
+				setIsCreatingBranch(false);
+				setNewBranchName("");
+				setMenuOpen(false);
+			} catch (error) {
+				console.error("Failed to create branch", error);
+				setActionError("Could not create branch.");
+			} finally {
+				setPendingAction(null);
+			}
+		},
+		[lix, isBusy, branches.length],
+	);
+
+	const handleStartCreateBranch = useCallback(() => {
+		setNewBranchName(`draft-${branches.length + 1}`);
+		setIsCreatingBranch(true);
+	}, [branches.length]);
+
+	const handleCreateBranchSubmit = useCallback(
+		(event: FormEvent<HTMLFormElement>) => {
+			event.preventDefault();
+			event.stopPropagation();
+			void createBranch(newBranchName);
+		},
+		[createBranch, newBranchName],
+	);
 
 	const handleRenameBranch = useCallback(
 		async (branchId: string, currentName: string) => {
+			if (isBusy) return;
 			const entered = window.prompt("Rename branch", currentName);
 			if (entered === null) return;
 			const trimmed = entered.trim();
 			if (trimmed === "" || trimmed === currentName) return;
 			setPendingAction(branchId);
+			setActionError(null);
 			try {
 				await qb(lix)
 					.updateTable("lix_branch")
@@ -147,15 +192,17 @@ function BranchSwitcherContent({
 					.execute();
 			} catch (error) {
 				console.error("Failed to rename branch", error);
+				setActionError("Could not rename branch.");
 			} finally {
 				setPendingAction(null);
 			}
 		},
-		[lix],
+		[lix, isBusy],
 	);
 
 	const handleDeleteBranch = useCallback(
 		async (branchId: string, branchName: string) => {
+			if (isBusy) return;
 			if (branchId === activeBranchRow.id) {
 				window.alert("Cannot delete the active branch.");
 				return;
@@ -165,6 +212,7 @@ function BranchSwitcherContent({
 			);
 			if (!confirmed) return;
 			setPendingAction(branchId);
+			setActionError(null);
 			const currentActiveId = activeBranchRow.id;
 			try {
 				await qb(lix)
@@ -178,15 +226,15 @@ function BranchSwitcherContent({
 				setMenuOpen(false);
 			} catch (error) {
 				console.error("Failed to delete branch", error);
+				setActionError("Could not delete branch.");
 			} finally {
 				setPendingAction(null);
 			}
 		},
-		[lix, activeBranchRow.id],
+		[lix, isBusy, activeBranchRow.id],
 	);
 
 	const buttonLabel = `${activeBranchRow.name}`;
-	const isBusy = pendingAction !== null;
 
 	return (
 		<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -197,6 +245,7 @@ function BranchSwitcherContent({
 					size="sm"
 					className="inline-flex h-5.5 items-center gap-1 rounded-md px-1.5 font-normal text-[var(--color-icon-tertiary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)]"
 					aria-label="Select branch"
+					disabled={isBusy}
 				>
 					<GitBranch className="size-3" />
 					<span className="text-[11.5px]">{buttonLabel}</span>
@@ -307,14 +356,62 @@ function BranchSwitcherContent({
 						);
 					})
 				)}
+				{actionError ? (
+					<div
+						className="px-2 py-1.5 text-xs text-[var(--color-text-notice-danger)]"
+						role="alert"
+					>
+						{actionError}
+					</div>
+				) : null}
 				<DropdownMenuSeparator />
-				<DropdownMenuItem
-					onSelect={handleCreateBranch}
-					className="flex items-center gap-2 px-2 py-1.5 text-xs text-[var(--color-text-secondary)]"
-				>
-					<Plus className="h-3 w-3" />
-					<span>Create branch</span>
-				</DropdownMenuItem>
+				{isCreatingBranch ? (
+					<form
+						className="flex items-center gap-1.5 px-2 py-1.5"
+						onSubmit={handleCreateBranchSubmit}
+						onKeyDown={(event) => {
+							event.stopPropagation();
+							if (event.key === "Escape") {
+								event.preventDefault();
+								setIsCreatingBranch(false);
+								setNewBranchName("");
+							}
+						}}
+					>
+						<input
+							ref={newBranchNameInputRef}
+							aria-label="Branch name"
+							className="h-6 min-w-0 flex-1 rounded-sm border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-2 text-xs text-[var(--color-text-primary)] outline-none focus:border-[var(--color-border-focus)]"
+							value={newBranchName}
+							onChange={(event) => setNewBranchName(event.target.value)}
+						/>
+						<Button
+							type="submit"
+							variant="ghost"
+							size="sm"
+							className="h-6 px-2 text-xs"
+							disabled={pendingAction === "create"}
+						>
+							Create
+						</Button>
+					</form>
+				) : (
+					<DropdownMenuItem
+						onSelect={(event) => {
+							event.preventDefault();
+							handleStartCreateBranch();
+						}}
+						onClick={(event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							handleStartCreateBranch();
+						}}
+						className="flex items-center gap-2 px-2 py-1.5 text-xs text-[var(--color-text-secondary)]"
+					>
+						<Plus className="h-3 w-3" />
+						<span>Create branch</span>
+					</DropdownMenuItem>
+				)}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

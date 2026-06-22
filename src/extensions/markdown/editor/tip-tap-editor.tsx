@@ -470,6 +470,24 @@ function TipTapEditorLoadedContent({
 		);
 	}
 
+	if (!hasInitialFile) {
+		return (
+			<div className={className ?? undefined}>
+				<div className="flex h-full min-h-[200px] items-center justify-center bg-background px-6 py-12 text-center">
+					<div className="max-w-sm space-y-2 text-sm text-[var(--color-text-secondary)]">
+						<p className="font-medium text-[var(--color-text-primary)]">
+							File is not on this branch.
+						</p>
+						<p>
+							This file exists in another branch, but it is not available in the
+							current branch.
+						</p>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
 	if (!editor) {
 		return (
 			<div className={className ?? undefined}>

@@ -12,6 +12,7 @@ import { handlePaste as defaultHandlePaste } from "./handle-paste";
 import { SlashCommandsExtension } from "./extensions/slash-commands";
 import { TableNavigationExtension } from "./extensions/table-navigation";
 import { upsertMarkdownFile } from "./upsert-markdown-file";
+import { registerMarkdownAutosaveFlush } from "./autosave-flush";
 
 type CreateEditorArgs = {
 	lix: Lix;
@@ -88,6 +89,7 @@ export function createEditor(args: CreateEditorArgs): Editor {
 	let destroyed = false;
 	let editorInstance: Editor | null = null;
 	let currentEditor: Editor | null = null;
+	let unregisterAutosaveFlush: (() => void) | null = null;
 	let lastPersistedMarkdown = normalizePersistedMarkdown(
 		initialMarkdown ?? serializeAst(ast as any),
 	);
@@ -105,6 +107,10 @@ export function createEditor(args: CreateEditorArgs): Editor {
 	};
 	const runPersist = (editor: Editor): Promise<void> => {
 		if (!fileId || !persistState) return Promise.resolve();
+		if (persistStateTimer) {
+			clearTimeout(persistStateTimer);
+			persistStateTimer = null;
+		}
 		if (persistRunning) {
 			persistQueued = true;
 			return persistPromise ?? Promise.resolve();
@@ -123,6 +129,20 @@ export function createEditor(args: CreateEditorArgs): Editor {
 		})();
 		return persistPromise;
 	};
+	const flushPersist = async (): Promise<void> => {
+		const editorToPersist = currentEditor ?? editorInstance;
+		if (!editorToPersist || !fileId || !persistState) return;
+		if (persistRunning) {
+			persistQueued = true;
+			await (persistPromise ?? Promise.resolve());
+			return;
+		}
+		await runPersist(editorToPersist);
+	};
+
+	if (fileId && persistState) {
+		unregisterAutosaveFlush = registerMarkdownAutosaveFlush(flushPersist);
+	}
 
 	const placeholderConfig: any = {
 		placeholder: ({ node }: { node: any }) =>
@@ -182,6 +202,8 @@ export function createEditor(args: CreateEditorArgs): Editor {
 		},
 		onDestroy: () => {
 			persistQueued = false;
+			unregisterAutosaveFlush?.();
+			unregisterAutosaveFlush = null;
 			if (persistStateTimer) {
 				clearTimeout(persistStateTimer);
 				persistStateTimer = null;
